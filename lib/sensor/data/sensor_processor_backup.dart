@@ -2,6 +2,7 @@ import 'package:proyecto_imu_v1_2/sensor/data/low_pass_filter.dart';
 import 'package:proyecto_imu_v1_2/sensor/data/clasificador_de_datos.dart';
 import 'package:proyecto_imu_v1_2/sensor/data/fusion_y_acortamiento_datos.dart';
 import 'package:proyecto_imu_v1_2/sensor/data/conteopasostexteo.dart';
+import 'package:scidart/numdart.dart';
 
 class DataProcessor {
   final ConteoPasosTexteando conteoPasos = ConteoPasosTexteando();
@@ -38,6 +39,7 @@ class DataProcessor {
   double umbralValleSinFiltrar = -0.6;
 
   // Estados de análisis
+  bool inicioAnalisis2 = false;
   bool inicioAnalisis3 = false;
   bool inicioAnalisis4 = false;
   bool inicioAnalisis5 = false;
@@ -56,12 +58,25 @@ class DataProcessor {
   List<double> vallesListFiltrado = [];
   List<double> unionCrucesPicosVallesList = [];
   List<double> unionCrucesPicosVallesListFiltrado = [];
+  List<double> unionCrucesPicosVallesListTotal = [];
   List<double> unionCrucesPicosVallesListFiltradoTotal = [];
 
   // Matrices de procesamiento (consolidadas)
   List<List<double>> matrizGyro = [[], [], []];
   List<List<double>> matrizordenada = [[], [], []];
+  List<List<double>> matrizordenada1 = [[], [], []];
   List<double> primeraFilaMatrizOrdenada = [];
+  List<List<double>> matrizordenada2 = [[], [], []];
+  
+  List<double> unionordenadoList = [];
+  List<double> unionordenadoList1 = [];
+  List<double> unionordenadoList2 = [];
+  List<double> unionordenadoListfil = [];
+  List<double> unionordenadoListfil1 = [];
+  List<double> unionordenadoListfil2 = [];
+  List<double> unionordenadoListdef = [];
+  List<double> unionordenadoListdef1 = [];
+  List<double> unionordenadoListdef2 = [];
   
   // Datos de salida finales
   List<List<double>> matrizUltimosDatos = List.generate(5, (i) => List.filled(i == 4 ? 20 : 4, 0.0));
@@ -76,6 +91,7 @@ class DataProcessor {
 
   void addAccelerometer(
     double magnitude,
+    double frequency,
     double gyroMagnitude,
   ) {
     // Paso 1: Filtrar en tiempo real
@@ -97,11 +113,12 @@ class DataProcessor {
     bool ready = (indiceInicio + ventanaTiempo <= index);
     if (ready) {
       _processWindow(inicio, fin);
-      inicioAnalisis3 = true; // El pipeline ahora comienza en la etapa 3
+      inicioAnalisis2 = true;
       indiceInicio += ventanaTiempo;
     }
     
     // Procesar análisis secuencial
+    if (inicioAnalisis2) _processFiltering(inicio, fin);
     if (inicioAnalisis3) _processCrossings(inicio, fin);
     if (inicioAnalisis4) _processPeaks(inicio, fin);
     if (inicioAnalisis5) _processValleys(inicio, fin);
@@ -112,57 +129,61 @@ class DataProcessor {
   }
   
   void _processWindow(int inicio, int fin) {
-    // --- Lógica de la ventana de datos crudos y desfasados ---
-    var ventanaAccXYZ = accMagnitudeList.sublist(
-      inicio,
-      fin,
-    );
     var ventanaGyroXYZ = gyroMagnitudeList.sublist(
-      inicio,
-      fin,
+      indiceInicio,
+      indiceInicio + ventanaTiempo,
+    );
+    var ventanaAccXYZ = accMagnitudeList.sublist(
+      indiceInicio,
+      indiceInicio + ventanaTiempo,
     );
     
+    // Manejo del desfase
     List<double> ventanaAccXYZdesfasada;
     List<double> ventanaGyroXYZdesfasada;
     
-    if (inicio == 0) {
+    if (indiceInicio == 0) {
       List<double> inicioDesfase = [...List.filled(25, 0.0), ...ventanaAccXYZ];
       ventanaAccXYZdesfasada = inicioDesfase.sublist(
-        inicio,
-        fin,
+        indiceInicio,
+        indiceInicio + ventanaTiempo,
       );
       inicioDesfase = [...List.filled(25, 0.0), ...ventanaGyroXYZ];
       ventanaGyroXYZdesfasada = inicioDesfase.sublist(
-        inicio,
-        fin,
+        indiceInicio,
+        indiceInicio + ventanaTiempo,
       );
     } else {
       ventanaAccXYZdesfasada = accMagnitudeList.sublist(
-        inicio - 25,
-        fin - 25,
+        indiceInicio - 25,
+        indiceInicio + ventanaTiempo - 25,
       );
       ventanaGyroXYZdesfasada = gyroMagnitudeList.sublist(
-        inicio - 25,
-        fin - 25,
+        indiceInicio - 25,
+        indiceInicio + ventanaTiempo - 25,
       );
     }
     
     accMagnitudeListDesfasada.addAll(ventanaAccXYZdesfasada);
     gyroMagnitudeListDesfasada.addAll(ventanaGyroXYZdesfasada);
-
-    // --- Lógica de la ventana de datos filtrados (antes en _processFiltering) ---
+  }
+  
+  void _processFiltering(int inicio, int fin) {
     var ventanaAccXYZFiltered = accMagnitudeListFiltered.sublist(
-      inicio,
-      fin,
+      indiceInicio - ventanaTiempo,
+      indiceInicio,
     );
     var ventanaGyroXYZFiltered = gyroMagnitudeListFiltered.sublist(
-      inicio,
-      fin,
+      indiceInicio - ventanaTiempo,
+      indiceInicio,
     );
 
     historialFiltrado.addAll(ventanaAccXYZFiltered);
     ventanaGyroXYZFiltradaList.addAll(ventanaGyroXYZFiltered);
     matrizsignalfiltertotal.add(ventanaAccXYZFiltered); // Usar datos filtrados
+
+    inicioAnalisis2 = false;
+    inicioAnalisis3 = true;
   }
   
   void _processCrossings(int inicio, int fin) {
@@ -248,6 +269,7 @@ class DataProcessor {
     unionCrucesPicosVallesListFiltrado = AnalizadorDeSenales.unionCrucesPicosValles(
       crucesPorCeroListFiltrado, picosListFiltrado, vallesListFiltrado);
     
+    unionCrucesPicosVallesListTotal.addAll(unionCrucesPicosVallesList);
     unionCrucesPicosVallesListFiltradoTotal.addAll(unionCrucesPicosVallesListFiltrado);
     
     inicioAnalisis6 = false;
@@ -262,6 +284,10 @@ class DataProcessor {
       inicioAnalisis8 = true;
       return;
     }
+    var ventanaDesfasada = accMagnitudeListDesfasada.sublist(
+      accMagnitudeListDesfasada.length - ventanaTiempo,
+      accMagnitudeListDesfasada.length
+    );
     var datosFiltrados = historialFiltrado.sublist(
       historialFiltrado.length - ventanaTiempo,
       historialFiltrado.length
@@ -280,7 +306,20 @@ class DataProcessor {
     // Crear matrices acortadas
     matrizordenada = _acortaFusionaDatos.matrizAcortada(unionCrucesPicosVallesListFiltrado, datosFiltrados);
     primeraFilaMatrizOrdenada.addAll(matrizordenada[0]);
+    matrizordenada1 = _acortaFusionaDatos.matrizAcortada(unionCrucesPicosVallesList, ventanaDesfasada);
+    
   
+
+    // Agregar datos a las listas de unión
+    unionordenadoListfil.addAll(matrizordenada[0]);
+    unionordenadoListfil1.addAll(matrizordenada[1]);
+    unionordenadoListfil2.addAll(matrizordenada[2]);
+    unionordenadoList.addAll(matrizordenada1[0]);
+    unionordenadoList1.addAll(matrizordenada1[1]);
+    unionordenadoList2.addAll(matrizordenada1[2]);
+    unionordenadoListdef.addAll(matrizordenada2[0]);
+    unionordenadoListdef1.addAll(matrizordenada2[1]);
+    unionordenadoListdef2.addAll(matrizordenada2[2]);
 
     inicioAnalisis7 = false;
     inicioAnalisis8 = true;
@@ -304,7 +343,7 @@ class DataProcessor {
   
   void _finalizarAnalisis() {
     for (int i = 0; i < 3; i++) {
-      matrizordenadatotal[i].addAll(matrizordenada[i]);
+      matrizordenadatotal[i].addAll(matrizordenada2[i]);
     }
     matrizordenadatotal[3] = tiempoDePasosList;
     matrizordenadatotal[4].addAll(matrizGyro[2]);

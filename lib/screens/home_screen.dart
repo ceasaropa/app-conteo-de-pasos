@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:proyecto_imu_v1_2/sensor/sensor_manager.dart';
-import 'package:proyecto_imu_v1_2/sensor/data/sensor_processor.dart';
 import 'package:proyecto_imu_v1_2/widgets/graphbuilder.dart';
-import 'package:proyecto_imu_v1_2/sensor/guardar/savedata.dart';
-
+import 'package:proyecto_imu_v1_2/controllers/home_controller.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/modern_header.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/recording_controls.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/tab_bar_widget.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/sections/sensor_section.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/sections/analysis_section.dart';
+import 'package:proyecto_imu_v1_2/widgets/home/sections/graph_section.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,183 +15,115 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  late final SensorManager _sensorManager;
-  late final DataProcessor _dataProcessor;
+class _HomeScreenState extends State<HomeScreen> 
+    with TickerProviderStateMixin {
+  
+  late final HomeController _controller;
   final GraphBuilder _graphBuilder = GraphBuilder();
-  bool showgraph = false;
 
   @override
   void initState() {
     super.initState();
-    _dataProcessor = DataProcessor();
-    _sensorManager = SensorManager(onUpdate: _onSensorDataUpdate,dataProcessor: _dataProcessor);  // Pasamos el callback
+    _controller = HomeController();
+    _controller.initialize(this);
   }
 
   @override
   void dispose() {
-    _sensorManager.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  // Esta función se llama cada vez que hay una actualización en los sensores
-  void _onSensorDataUpdate() {
-    setState(() {});  // Llamamos a setState para redibujar la UI
+  void _onDataSaved() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Datos guardados exitosamente'),
+        backgroundColor: const Color(0xFF4ECDC4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Monitor de Sensores')),
-      body: SingleChildScrollView(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              
-              // Sección del Acelerómetro
-              const Text(
-                'Acelerómetro',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Text('X: ${_sensorManager.accX.toStringAsFixed(2)} m/s²'),
-              Text('Y: ${_sensorManager.accY.toStringAsFixed(2)} m/s²'),
-              Text('Z: ${_sensorManager.accZ.toStringAsFixed(2)} m/s²'),
-              Text(
-                'Magnitud: ${_sensorManager.accMagnitude.toStringAsFixed(2)} m/s²',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              
-              const SizedBox(height: 30),
-              
-              // Sección del Giroscopio
-              const Text(
-                'Giroscopio',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Text('X: ${_sensorManager.gyroX.toStringAsFixed(2)} rad/s'),
-              Text('Y: ${_sensorManager.gyroY.toStringAsFixed(2)} rad/s'),
-              Text('Z: ${_sensorManager.gyroZ.toStringAsFixed(2)} rad/s'),
-              Text(
-                'Magnitud: ${_sensorManager.gyroMagnitude.toStringAsFixed(2)} rad/s',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              
-              const SizedBox(height: 30),
-              
-              // Información de muestreo
-              Text(
-                'Frecuencia: ${_sensorManager.frequency.toStringAsFixed(2)} Hz',
-                style: const TextStyle(fontSize: 18),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Estado: ${_sensorManager.isRunning ? 'ACTIVO' : 'INACTIVO'}',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: _sensorManager.isRunning ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              
-              const SizedBox(height: 30),
-              Text('Pasos: ${_dataProcessor.matrizUltimosDatos[3][2].toInt()}'),
-              const SizedBox(height: 20),
-              _dataProcessor.tiempoDePasosList.isNotEmpty
-              ? Text('Tiempos por pasos (ms): ${_dataProcessor.tiempoDePasosList.map((t) => t.toStringAsFixed(0)).join(' ms, ')} ms')
-              : SizedBox.shrink(),
-            
-              // Botón de control
-              ElevatedButton(
-                onPressed: _sensorManager.toggleSensors,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                ),
-                child: Text(
-                  _sensorManager.isRunning ? 'DETENER SENSORES' : 'INICIAR SENSORES',
-                  style: const TextStyle(fontSize: 18),
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (!_sensorManager.isRunning)
-                ElevatedButton.icon(
-                  icon: Icon(Icons.save),
-                  label: Text('Guardar Datos'),
-                  onPressed: () {
-                    GuardarDatos.guardarMatrizJson(_dataProcessor.matrizordenadatotal, generarNombreArchivo());
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Datos guardados en almacenamiento interno')),
-                    );
-                  },
-                ),
-              const Text('Pasos por ventana', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 200, // altura fija para que no crezca infinito
-                child: ListView.builder(
-                  itemCount: _dataProcessor.pasosPorVentana.length,
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      leading: const Icon(Icons.directions_walk),
-                      title: Text('Ventana ${index + 1}'),
-                      trailing: Text('${_dataProcessor.pasosPorVentana[index]} pasos'),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  itemCount: _dataProcessor.unionordenadoListfil2.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: Text('Muestra ${index + 1}: ${_dataProcessor.unionordenadoListfil2[index]}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    );
-                  },
-                ),
-              ),
-              SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  itemCount: _dataProcessor.unionordenadoListdef2.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: Text('Muestra ${index + 1}: ${_dataProcessor.unionordenadoListdef2[index]}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    );
-                  },
-                ),
-              ),
-              
+      backgroundColor: const Color(0xFF0A0E27),
+      body: SafeArea(
+        child: ListenableBuilder(
+          listenable: _controller,
+          builder: (context, child) {
+            return FadeTransition(
+              opacity: _controller.fadeAnimation,
+              child: CustomScrollView(
+                slivers: [
+                  // Header moderno
+                  SliverToBoxAdapter(
+                    child: ModernHeader(
+                      isRunning: _controller.sensorManager.isRunning,
+                      pulseAnimation: _controller.pulseAnimation,
+                      frequency: _controller.sensorManager.frequency,
+                    ),
+                  ),
 
-              // 📈 Gráfico de magnitud del acelerómetro
-              if (!_sensorManager.isRunning) _graphBuilder.buildGraph(_dataProcessor.accMagnitudeListDesfasada, color: Colors.blue),
-              if (!_sensorManager.isRunning) _graphBuilder.buildGraph(_dataProcessor.historialFiltrado, color: Colors.blue),
+                  // Control de grabación
+                  SliverToBoxAdapter(
+                    child: RecordingControls(
+                      isRunning: _controller.sensorManager.isRunning,
+                      onToggleSensors: _controller.toggleSensors,
+                      dataProcessor: _controller.dataProcessor,
+                      onDataSaved: _onDataSaved,
+                    ),
+                  ),
 
+                  // Tabs para diferentes vistas
+                  SliverToBoxAdapter(
+                    child: TabBarWidget(
+                      selectedTabIndex: _controller.uiState.selectedTabIndex,
+                      onTabSelected: _controller.updateSelectedTab,
+                    ),
+                  ),
 
-              const SizedBox(height: 30),
-            ],
-          ),
+                  // Contenido según tab seleccionado
+                  SliverToBoxAdapter(
+                    child: _buildTabContent(),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
-}
-String generarNombreArchivo() {
-  final now = DateTime.now();
-  final nombreArchivo = '${now.year}'
-      '-${now.month.toString().padLeft(2, '0')}'
-      '-${now.day.toString().padLeft(2, '0')}'
-      '_${now.hour.toString().padLeft(2, '0')}'
-      '-${now.minute.toString().padLeft(2, '0')}'
-      '-${now.second.toString().padLeft(2, '0')}.txt';
 
-  return nombreArchivo;
+  Widget _buildTabContent() {
+    switch (_controller.uiState.selectedTabIndex) {
+      case 0:
+        return SensorSection(
+          sensorManager: _controller.sensorManager,
+        );
+      case 1:
+        return AnalysisSection(
+          dataProcessor: _controller.dataProcessor,
+          sensorManager: _controller.sensorManager,
+        );
+      case 2:
+        return GraphSection(
+          dataProcessor: _controller.dataProcessor,
+          sensorManager: _controller.sensorManager,
+          availableWindows: _controller.uiState.availableWindows,
+          selectedWindowIndex: _controller.uiState.selectedWindowIndex,
+          onWindowSelected: _controller.updateSelectedWindow,
+          pulseAnimation: _controller.pulseAnimation,
+          graphBuilder: _graphBuilder,
+        );
+      default:
+        return SensorSection(
+          sensorManager: _controller.sensorManager,
+        );
+    }
+  }
 }

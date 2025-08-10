@@ -1,5 +1,7 @@
 class AnalizadorDeSenales {
-  static List<double> crucesPorCero(List<double> senalFiltrada, int ventana, int lateral) {
+  static List<double> crucesPorCero(
+    List<double> senalFiltrada,
+  ) {
     int n = senalFiltrada.length;
     List<double> vectorCruces = List.filled(n, 0.0);
 
@@ -13,24 +15,13 @@ class AnalizadorDeSenales {
         vectorCruces[i] = 1.0;
       }
     }
-
-    if ((ventana + lateral) < n && vectorCruces[ventana + lateral] == 1) {
-      vectorCruces[ventana + lateral] = 0;
-      vectorCruces[ventana + lateral - 1] = 1;
-    }
-    if ((ventana + lateral) == n && vectorCruces[ventana] == 1) {
-      vectorCruces[ventana] = 0;
-      vectorCruces[ventana - 1] = 1;
-    }
-    if ((ventana + lateral) < n && vectorCruces[lateral - 1] == 1) {
-      vectorCruces[lateral - 1] = 0;
-      vectorCruces[lateral] = 1;
-    }
-
     return vectorCruces;
   }
 
-  static List<double> deteccionPicos(List<double> senalFiltrada, double umbralpico) {
+  static List<double> deteccionPicos(
+    List<double> senalFiltrada,
+    double umbralpico,
+  ) {
     int n = senalFiltrada.length;
     int bandera = 0;
     List<double> senalPositiva = List.filled(n, 0.0);
@@ -54,7 +45,10 @@ class AnalizadorDeSenales {
     return picos;
   }
 
-  static List<double> deteccionValles(List<double> senalFiltrada, double umbralValles) {
+  static List<double> deteccionValles(
+    List<double> senalFiltrada,
+    double umbralValles,
+  ) {
     int N = senalFiltrada.length;
     int bandera = 0;
     List<double> senalNegativa = List.filled(N, 0.0);
@@ -83,7 +77,10 @@ class AnalizadorDeSenales {
   }
 
   static List<double> unionCrucesPicosValles(
-      List<double> cruces, List<double> picos, List<double> valles) {
+    List<double> cruces,
+    List<double> picos,
+    List<double> valles,
+  ) {
     int N = cruces.length;
     List<double> vectorCPV = List.filled(N, 0.0);
 
