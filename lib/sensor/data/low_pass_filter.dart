@@ -1,13 +1,14 @@
 import 'dart:math';
 
-/// Filtro Butterworth de 2do orden base
-class _StreamingFilterBase {
+/// Filtro Butterworth público de 2do orden
+/// (Antes llamado _StreamingFilterBase)
+class StreamingFilter2ndOrder {
   double _x1 = 0.0, _x2 = 0.0;
   double _y1 = 0.0, _y2 = 0.0;
   
   final double a0, a1, a2, b1, b2;
   
-  _StreamingFilterBase({required double cutoffHz, required double fs}) :
+  StreamingFilter2ndOrder({required double cutoffHz, required double fs}) :
     a0 = _calculateA0(cutoffHz, fs),
     a1 = _calculateA1(cutoffHz, fs),
     a2 = _calculateA2(cutoffHz, fs),
@@ -65,14 +66,16 @@ class _StreamingFilterBase {
   }
 }
 
-/// Filtro de 4to orden base
-class _StreamingFilter4thOrder {
-  late _StreamingFilterBase _stage1;
-  late _StreamingFilterBase _stage2;
+/// Filtro público de 4to orden
+/// (Antes llamado _StreamingFilter4thOrder)
+class StreamingFilter4thOrder {
+  late StreamingFilter2ndOrder _stage1;
+  late StreamingFilter2ndOrder _stage2;
   
-  _StreamingFilter4thOrder({required double cutoffHz, required double fs}) {
-    _stage1 = _StreamingFilterBase(cutoffHz: cutoffHz, fs: fs);
-    _stage2 = _StreamingFilterBase(cutoffHz: cutoffHz, fs: fs);
+  StreamingFilter4thOrder({required double cutoffHz, required double fs}) {
+    // Se usan las instancias de la clase pública recién renombrada
+    _stage1 = StreamingFilter2ndOrder(cutoffHz: cutoffHz, fs: fs);
+    _stage2 = StreamingFilter2ndOrder(cutoffHz: cutoffHz, fs: fs);
   }
   
   double filter(double input) {
@@ -89,7 +92,7 @@ class _StreamingFilter4thOrder {
 /// Filtro IIR pasa bajas en tiempo real con máximo suavizado
 /// Combina filtro de 4to orden + promedio móvil exponencial
 class StreamingFilter {
-  late _StreamingFilter4thOrder _mainFilter;
+  late StreamingFilter4thOrder _mainFilter;
   double _emaOutput = 0.0;
   bool _initialized = false;
   final double _alpha;
@@ -99,7 +102,8 @@ class StreamingFilter {
     required double fs,
     double smoothingFactor = 0.1  // 0.1 = muy suave, 0.3 = menos suave
   }) : _alpha = smoothingFactor {
-    _mainFilter = _StreamingFilter4thOrder(cutoffHz: cutoffHz, fs: fs);
+    // Se usa la instancia de la clase pública recién renombrada
+    _mainFilter = StreamingFilter4thOrder(cutoffHz: cutoffHz, fs: fs);
   }
   
   /// Filtra una muestra individual con máximo suavizado

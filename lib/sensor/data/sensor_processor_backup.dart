@@ -78,8 +78,9 @@ class DataProcessor {
   List<double> unionordenadoListdef1 = [];
   List<double> unionordenadoListdef2 = [];
   
-  // Datos de salida finales
-  List<List<double>> matrizUltimosDatos = List.generate(5, (i) => List.filled(i == 4 ? 20 : 4, 0.0));
+  // Datos de salida finales (incluye 4 filas: 3 originales + 1 para heading filtrado)
+  List<List<double>> matrizDatosRecientes = List.generate(4, (_) => List.filled(4, 0.0));
+  List<List<double>> matrizPasos = List.generate(3, (i) => List.filled(20, 0.0));
   List<List<double>> matrizSecuenciasrevisar = [];
   List<List<double>> matrizsignalfiltertotal = [];
   List<double> unionFiltradorecortadoTotal = [];
@@ -327,15 +328,16 @@ class DataProcessor {
   
   void _processStepCounting() {
     conteoPasos.procesar(
-      matrizordenada, matrizUltimosDatos, matrizSecuenciasrevisar,
+        matrizordenada, matrizDatosRecientes, matrizPasos,
       unionFiltradorecortadoTotal, unionFiltradorecortadoTotal2,
       ventanaTiempo, matrizGyro, tiemposRestados);
       
-    pasosPorVentana.add(matrizUltimosDatos[3][1].toInt());
-    for (int i = 0; i < matrizUltimosDatos[3][1]; i++) {
-      tiempoDePasosList.add(matrizUltimosDatos[4][i]);
+      pasosPorVentana.add(matrizPasos[0][1].toInt());
+      for (int i = 0; i < matrizPasos[0][1]; i++) {
+        tiempoDePasosList.add(matrizPasos[1][i]);
+      }
+      matrizPasos[0][1] = 0;
     }
-    matrizUltimosDatos[3][1] = 0;
 
     inicioAnalisis8 = false;
     inicioAnalisis9 = true;
@@ -357,7 +359,7 @@ class DataProcessor {
       'index': index,
       'indiceInicio': indiceInicio,
       'totalWindows': pasosPorVentana.length,
-      'totalSteps': matrizUltimosDatos[3][2].toInt(),
+  'totalSteps': matrizPasos[0][2].toInt(),
       'thresholds': {
         'umbralPico': umbralPico,
         'umbralValle': umbralValle,

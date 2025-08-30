@@ -4,6 +4,7 @@ import 'package:proyecto_imu_v1_2/sensor/sensor_manager.dart';
 import 'package:proyecto_imu_v1_2/widgets/graphbuilder.dart';
 import '../../cards/graph_card.dart';
 import '../../common/section_title.dart';
+
 class GraphSection extends StatelessWidget {
   final DataProcessor dataProcessor;
   final SensorManager sensorManager;
@@ -12,6 +13,7 @@ class GraphSection extends StatelessWidget {
   final Function(int?) onWindowSelected;
   final Animation<double> pulseAnimation;
   final GraphBuilder graphBuilder;
+
   const GraphSection({
     super.key,
     required this.dataProcessor,
@@ -22,6 +24,7 @@ class GraphSection extends StatelessWidget {
     required this.pulseAnimation,
     required this.graphBuilder,
   });
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -29,7 +32,6 @@ class GraphSection extends StatelessWidget {
       child: Column(
         children: [
           if (sensorManager.isRunning) ...[
-            //_buildKalmanMiniGraph(), // Eliminado
             const SizedBox(height: 16),
             _buildRecordingIndicator(),
           ] else ...[
@@ -44,6 +46,7 @@ class GraphSection extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildWindowSelector() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -128,6 +131,7 @@ class GraphSection extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildGraphs() {
     return Column(
       children: [
@@ -145,15 +149,37 @@ class GraphSection extends StatelessWidget {
           peakThreshold: 1.2, // ⭐ umbralPicoSinFiltrar
           valleyThreshold: -0.6, // ⭐ umbralValleSinFiltrar
         ),
+        
+        // NUEVO: Gráfica para el filtro de 2do orden
         GraphCard(
-          title: 'Acelerómetro (Señal Filtrada)',
-          data: dataProcessor.accMagnitudeListFiltered.sublist(0,dataProcessor.index),
+          title: 'Acelerómetro (Filtro 2do Orden)',
+          data: dataProcessor.accMagnitudeListFiltered2ndOrder.sublist(0, dataProcessor.index),
+          color: const Color(0xFFF7B733), // Color nuevo para diferenciar
+          graphBuilder: graphBuilder,
+          peakThreshold: 1.0, // ⭐ umbralPico
+          valleyThreshold: -0.5, // ⭐ umbralValle
+        ),
+
+        // NUEVO: Gráfica para el filtro de 4to orden
+        GraphCard(
+          title: 'Acelerómetro (Filtro 4to Orden)',
+          data: dataProcessor.accMagnitudeListFiltered4thOrder.sublist(0, dataProcessor.index),
+          color: const Color(0xFF8FD9A8), // Color nuevo para diferenciar
+          graphBuilder: graphBuilder,
+          peakThreshold: 1.0, // ⭐ umbralPico
+          valleyThreshold: -0.5, // ⭐ umbralValle
+        ),
+
+        GraphCard(
+          title: 'Acelerómetro (Filtro 4to Orden + EMA)', // Título actualizado para mayor claridad
+          data: dataProcessor.accMagnitudeListFiltered.sublist(0, dataProcessor.index),
           color: const Color(0xFF4ECDC4),
           graphBuilder: graphBuilder,
           peakThreshold: 1.0, // ⭐ umbralPico
           valleyThreshold: -0.5, // ⭐ umbralValle
         ),
         const SizedBox(height: 20),
+
         // Sección de Giroscopio
         SectionTitle(
           title: 'Datos del Giroscopio',
@@ -177,6 +203,7 @@ class GraphSection extends StatelessWidget {
           valleyThreshold: -1.0, // ⭐ Simétrico para valles de gyro
         ),
         const SizedBox(height: 20),
+
         // Sección de Análisis
         SectionTitle(
           title: 'Análisis de Pasos',
@@ -199,6 +226,7 @@ class GraphSection extends StatelessWidget {
           peakThreshold: 1.0, // ⭐ umbralPico (datos ya procesados)
           valleyThreshold: -0.5, // ⭐ umbralValle (datos ya procesados)
         ),
+
         // Gráfico de ventana específica si está seleccionada
         if (selectedWindowIndex != null &&
             dataProcessor.matrizsignalfiltertotal.length > selectedWindowIndex!) ...[
@@ -220,6 +248,7 @@ class GraphSection extends StatelessWidget {
       ],
     );
   }
+
   Widget _buildRecordingIndicator() {
     return Container(
       padding: const EdgeInsets.all(40),

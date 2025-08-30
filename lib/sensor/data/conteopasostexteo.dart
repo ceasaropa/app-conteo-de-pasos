@@ -1,34 +1,147 @@
 import 'package:proyecto_imu_v1_2/sensor/data/fusion_y_acortamiento_datos.dart';
+import 'package:proyecto_imu_v1_2/sensor/data/heading_processor.dart';
+import 'package:proyecto_imu_v1_2/utils/position_calculator.dart';
+import 'Estimador_distancia_pasos.dart';
+import 'dart:math';
 
 class ConteoPasosTexteando {
   final acortamientoDatos = ProcesamientoEventos();
+  final controladorDifuso = ControladorDifusoK();
+  final headingProcessor = HeadingProcessor();
+
+  /// Getter para acceder a los azimuth promedio de cada paso detectado
+  List<double> get averageAzimuthPerStep =>
+      headingProcessor.averageAzimuthPerStep;
+
+  /// Getter para acceder a los patrones de heading (5 valores) de cada paso detectado
+  List<List<double>> get headingPatternsPerStep =>
+      headingProcessor.headingPatternsPerStep;
+
+  /// Reinicia los datos de azimuth para una nueva sesión
+  void resetAzimuthData() {
+    headingProcessor.resetAzimuthData();
+  }
+
+  /// Calcula el recorrido de posiciones usando las distancias y azimuth de los pasos
+  ///
+  /// [matrizPasos] Matriz con datos de pasos donde:
+  /// - Fila 1: Duraciones de pasos
+  /// - Fila 2: Longitudes de pasos
+  ///
+  /// Retorna Map con:
+  /// - 'coordenadas': Matriz de coordenadas [x, y]
+  /// - 'posicionFinal': Posición final {x, y, distancia}
+  /// - 'distanciaTotal': Distancia total recorrida
+  Map<String, dynamic> calcularRecorridoPosicion(
+    List<List<double>> matrizPasos,
+  ) {
+    final distancias = <double>[];
+    final azimuthList = headingProcessor.averageAzimuthPerStep;
+
+    // Extraer distancias válidas de la matriz de pasos
+    if (matrizPasos.length >= 3 && matrizPasos[2].isNotEmpty) {
+      final contadorPasos =
+          matrizPasos[0][1].toInt(); // Número de pasos detectados
+
+      for (int i = 0; i < contadorPasos && i < matrizPasos[2].length; i++) {
+        distancias.add(matrizPasos[2][i]);
+      }
+    }
+
+    // Validar que tengamos la misma cantidad de distancias y azimuth
+    final minLength =
+        distancias.length < azimuthList.length
+            ? distancias.length
+            : azimuthList.length;
+
+    if (minLength == 0) {
+      return {
+        'coordenadas': [<double>[], <double>[]],
+        'posicionFinal': {'x': 0.0, 'y': 0.0, 'distancia': 0.0},
+        'distanciaTotal': 0.0,
+      };
+    }
+
+    // Tomar solo los datos disponibles
+    final distanciasValidas = distancias.take(minLength).toList();
+    final azimuthValidos = azimuthList.take(minLength).toList();
+
+    // Calcular recorrido usando PositionCalculator
+    final coordenadas = PositionCalculator.calcularRecorrido([
+      distanciasValidas,
+      azimuthValidos,
+    ]);
+
+    // Obtener información adicional
+    final posicionFinal = PositionCalculator.obtenerPosicionFinal(coordenadas);
+    final distanciaTotal = PositionCalculator.calcularDistanciaTotal(
+      distanciasValidas,
+    );
+
+    return {
+      'coordenadas': coordenadas,
+      'posicionFinal': posicionFinal,
+      'distanciaTotal': distanciaTotal,
+    };
+  }
+
+  /// Obtiene información completa del recorrido incluyendo estadísticas
+  ///
+  /// [matrizPasos] Matriz con datos de pasos
+  ///
+  /// Retorna Map con información detallada del recorrido
+  Map<String, dynamic> obtenerInformacionCompleta(
+    List<List<double>> matrizPasos,
+  ) {
+    final recorrido = calcularRecorridoPosicion(matrizPasos);
+    final azimuthList = headingProcessor.averageAzimuthPerStep;
+    final contadorPasos =
+        matrizPasos.length >= 1 && matrizPasos[0].length >= 2
+            ? matrizPasos[0][1].toInt()
+            : 0;
+
+    return {
+      ...recorrido,
+      'pasos': {
+        'cantidad': contadorPasos,
+        'azimuthPromedio':
+            azimuthList.isNotEmpty
+                ? azimuthList.reduce((a, b) => a + b) / azimuthList.length
+                : 0.0,
+        'patrones': headingProcessor.headingPatternsPerStep,
+      },
+    };
+  }
 
   void procesar(
     List<List<double>> matrizOrdenada,
-    List<List<double>> matrizUltimosDatos,
+    List<List<double>> matrizDatosRecientes,
+    List<List<double>> matrizPasos,
     List<List<double>> matrizSecuenciasRevisar,
     List<double> unionFiltradoRecortadoTotal,
     List<double> unionFiltradoRecortadoTotal2,
     int ventanaTiempo,
     List<List<double>> matrizGyro,
-    List<double> listaTiemposRestados, // ✅ Nuevo parámetro
+    List<double> listaTiemposRestados,
   ) {
     if (matrizOrdenada.isEmpty || matrizOrdenada[0].isEmpty) return;
 
     final n = matrizOrdenada[0].length + 4;
     List<List<double>> matrizDatosExtendida = List.generate(
-      3,
+      4, // Cambiado de 3 a 4 para incluir heading filtrado
       (_) => List.filled(n, 0.0),
     );
 
     for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 3; j++) {
-        matrizDatosExtendida[j][i] = matrizUltimosDatos[j][i];
+      for (int j = 0; j < 4; j++) {
+        // Cambiado de 3 a 4 para incluir heading
+        matrizDatosExtendida[j][i] = matrizDatosRecientes[j][i];
       }
     }
 
     for (int i = 4; i < n; i++) {
-      for (int j = 0; j < 3; j++) {
+      // matrizOrdenada siempre tiene 4 filas desde sensor processor stage 5
+      for (int j = 0; j < 4; j++) {
         final indexOrigen = i - 4;
         if (indexOrigen < matrizOrdenada[j].length) {
           matrizDatosExtendida[j][i] = matrizOrdenada[j][indexOrigen];
@@ -36,18 +149,25 @@ class ConteoPasosTexteando {
       }
     }
 
-    final (simbolosFilt, magnitudesFilt, tiemposFilt) = acortamientoDatos
-        .filtrarSimbolosCero(
-          matrizDatosExtendida[0],
-          matrizDatosExtendida[1],
-          matrizDatosExtendida[2],
-        );
-
-    var matrizDatosAcortada = acortamientoDatos.procesarSimbolosConsecutivos(
+    final (
       simbolosFilt,
       magnitudesFilt,
       tiemposFilt,
+      headingFilt,
+    ) = acortamientoDatos.filtrarSimbolosCeroConHeading(
+      matrizDatosExtendida[0],
+      matrizDatosExtendida[1],
+      matrizDatosExtendida[2],
+      matrizDatosExtendida[3],
     );
+
+    var matrizDatosAcortada = acortamientoDatos
+        .procesarSimbolosConsecutivosConHeading(
+          simbolosFilt,
+          magnitudesFilt,
+          tiemposFilt,
+          headingFilt,
+        );
 
     matrizDatosAcortada = _filtrarPrimerCruceConTiempo(matrizDatosAcortada);
 
@@ -57,42 +177,56 @@ class ConteoPasosTexteando {
       int faltan = 4 - totalFilas1;
       for (int i = 0; i < 4; i++) {
         if (i < faltan) {
-          matrizUltimosDatos[0][i] = 0;
-          matrizUltimosDatos[1][i] = 0;
-          matrizUltimosDatos[2][i] = 0;
+          matrizDatosRecientes[0][i] = 0;
+          matrizDatosRecientes[1][i] = 0;
+          matrizDatosRecientes[2][i] = 0;
+          matrizDatosRecientes[3][i] = 0; // Nueva fila para heading
         } else {
           int idx = totalFilas - totalFilas1 + (i - faltan);
           if (idx >= 0 && idx < totalFilas) {
-            // Se verifica si el tiempo del dato en matrizAcortada es menor a -65.
-            if (matrizDatosAcortada[2][idx] < -65) {
-              matrizUltimosDatos[0][i] = 0.0; // Se anula solo el símbolo.
+            if (matrizDatosAcortada[2][idx] < -50) {
+              matrizDatosRecientes[0][i] = 0.0;
             } else {
-              matrizUltimosDatos[0][i] = matrizDatosAcortada[0][idx];
+              matrizDatosRecientes[0][i] = matrizDatosAcortada[0][idx];
             }
-            // La magnitud y el tiempo se asignan de todas formas.
-            matrizUltimosDatos[1][i] = matrizDatosAcortada[1][idx];
-            matrizUltimosDatos[2][i] =
+            matrizDatosRecientes[1][i] = matrizDatosAcortada[1][idx];
+            matrizDatosRecientes[2][i] =
                 (ventanaTiempo - matrizDatosAcortada[2][idx]) * -1;
+
+            // Agregar datos de heading acortados y correlacionados a la cuarta fila
+            if (matrizDatosAcortada.length >= 4 &&
+                idx < matrizDatosAcortada[3].length) {
+              matrizDatosRecientes[3][i] = matrizDatosAcortada[3][idx];
+            } else {
+              matrizDatosRecientes[3][i] = 0.0;
+            }
           } else {
-            matrizUltimosDatos[0][i] = 0;
-            matrizUltimosDatos[1][i] = 0;
-            matrizUltimosDatos[2][i] = 0;
+            matrizDatosRecientes[0][i] = 0;
+            matrizDatosRecientes[1][i] = 0;
+            matrizDatosRecientes[2][i] = 0;
+            matrizDatosRecientes[3][i] = 0; // Nueva fila para heading
           }
         }
       }
     } else {
       for (int i = 0; i < 4; i++) {
         int idx = totalFilas - 4 + i;
-        // Se verifica si el tiempo del dato en matrizAcortada es menor a -65.
         if (matrizDatosAcortada[2][idx] < -65) {
-          matrizUltimosDatos[0][i] = 0.0; // Se anula solo el símbolo.
+          matrizDatosRecientes[0][i] = 0.0;
         } else {
-          matrizUltimosDatos[0][i] = matrizDatosAcortada[0][idx];
+          matrizDatosRecientes[0][i] = matrizDatosAcortada[0][idx];
         }
-        // La magnitud y el tiempo se asignan de todas formas.
-        matrizUltimosDatos[1][i] = matrizDatosAcortada[1][idx];
-        matrizUltimosDatos[2][i] =
+        matrizDatosRecientes[1][i] = matrizDatosAcortada[1][idx];
+        matrizDatosRecientes[2][i] =
             (ventanaTiempo - matrizDatosAcortada[2][idx]) * -1;
+
+        // Agregar datos de heading acortados y correlacionados a la cuarta fila
+        if (matrizDatosAcortada.length >= 4 &&
+            idx < matrizDatosAcortada[3].length) {
+          matrizDatosRecientes[3][i] = matrizDatosAcortada[3][idx];
+        } else {
+          matrizDatosRecientes[3][i] = 0.0;
+        }
       }
     }
     unionFiltradoRecortadoTotal.addAll(matrizDatosAcortada[0]);
@@ -100,11 +234,15 @@ class ConteoPasosTexteando {
     unionFiltradoRecortadoTotal2.addAll(matrizDatosAcortada[2]);
     unionFiltradoRecortadoTotal2.add(0.0);
 
-    if (matrizDatosAcortada[0].length < 5) return;
+    if (matrizDatosAcortada[0].length < 5) {
+      matrizPasos[0][0] = 0.0;
+      return;
+    }
 
     int filasM = matrizDatosAcortada[0].length - 4;
     int contadorPasos = 0;
-    int indicadorPaso = matrizUltimosDatos[3][0].toInt();
+    double longitudPaso = 0;
+    int indicadorPaso = matrizPasos[0][0].toInt();
 
     for (int i = 0; i < filasM; i++) {
       List<double> secuencia = [
@@ -117,9 +255,9 @@ class ConteoPasosTexteando {
 
       matrizSecuenciasRevisar.add(List.from(secuencia));
       if (secuencia[2] == 1 && secuencia[3] == 1 && secuencia[4] == 1) {
-        indicadorPaso = 0; // Reinicia el indicador de estado
-        matrizUltimosDatos[3][0] = 0.0; // Actualiza la matriz
-        continue; // Salta a la siguiente iteración
+        indicadorPaso = 0;
+        matrizPasos[0][0] = 0.0;
+        continue;
       }
 
       if (secuencia[0] == 1 && secuencia[2] == 1 && secuencia[4] == 1) {
@@ -127,20 +265,34 @@ class ConteoPasosTexteando {
             (secuencia[1] == 3 && secuencia[3] == 2)) {
           double tiempo1 = matrizDatosAcortada[2][i];
           double tiempo2 = matrizDatosAcortada[2][i + 4];
-
-          // Agregar los tiempos a la lista (primero tiempo1, luego tiempo2)
-
-          double diferencia = (tiempo2 - tiempo1).abs();
-
+          double amplitud1 = matrizDatosAcortada[1][i + 1];
+          double amplitud2 = matrizDatosAcortada[1][i + 3];
+          double diferenciaTiempo = (tiempo2 - tiempo1).abs();
+          double diferenciaAmplitud = amplitud1 + amplitud2.abs();
+          double kDinamico;
           if (secuencia[1] == 2 && secuencia[3] == 3) {
             if (indicadorPaso == 0) {
               indicadorPaso = 1;
-              matrizUltimosDatos[3][0] = 1.0;
+              matrizPasos[0][0] = 1.0;
             }
             if (indicadorPaso == 1) {
               listaTiemposRestados.add(tiempo1);
               listaTiemposRestados.add(tiempo2);
-              matrizUltimosDatos[4][contadorPasos] = diferencia;
+              kDinamico = controladorDifuso.calcularK(
+                diferenciaTiempo,
+                diferenciaAmplitud,
+              );
+              longitudPaso = kDinamico * pow(diferenciaAmplitud, 0.25);
+              matrizPasos[1][contadorPasos] = diferenciaTiempo;
+              matrizPasos[2][contadorPasos] = longitudPaso;
+
+              // Procesar azimuth para el paso detectado usando HeadingProcessor
+              headingProcessor.procesarAzimuthPaso(
+                matrizDatosAcortada,
+                i,
+                tiempo1,
+                tiempo2,
+              );
 
               contadorPasos++;
             }
@@ -149,12 +301,26 @@ class ConteoPasosTexteando {
           if (secuencia[1] == 3 && secuencia[3] == 2) {
             if (indicadorPaso == 0) {
               indicadorPaso = 2;
-              matrizUltimosDatos[3][0] = 2.0;
+              matrizPasos[0][0] = 2.0;
             }
             if (indicadorPaso == 2) {
               listaTiemposRestados.add(tiempo1);
               listaTiemposRestados.add(tiempo2);
-              matrizUltimosDatos[4][contadorPasos] = diferencia;
+              kDinamico = controladorDifuso.calcularK(
+                diferenciaTiempo,
+                diferenciaAmplitud,
+              );
+              longitudPaso = kDinamico * pow(diferenciaAmplitud, 0.25);
+              matrizPasos[1][contadorPasos] = diferenciaTiempo;
+              matrizPasos[2][contadorPasos] = longitudPaso;
+
+              // Procesar azimuth para el paso detectado usando HeadingProcessor
+              headingProcessor.procesarAzimuthPaso(
+                matrizDatosAcortada,
+                i,
+                tiempo1,
+                tiempo2,
+              );
 
               contadorPasos++;
             }
@@ -163,8 +329,9 @@ class ConteoPasosTexteando {
       }
     }
 
-    matrizUltimosDatos[3][1] = contadorPasos.toDouble();
-    matrizUltimosDatos[3][2] += contadorPasos.toDouble();
+    matrizPasos[0][1] = contadorPasos.toDouble();
+    matrizPasos[0][2] += contadorPasos.toDouble();
+    matrizPasos[0][3] += longitudPaso;
   }
 
   // Método privado para filtrar cruces consecutivos
@@ -175,8 +342,11 @@ class ConteoPasosTexteando {
       return matriz;
     }
 
+    // Determinar si tenemos 3 o 4 filas
+    final int numFilas = matriz.length;
+
     // Lista para almacenar el resultado del filtrado.
-    List<List<double>> resultado = List.generate(3, (_) => <double>[]);
+    List<List<double>> resultado = List.generate(numFilas, (_) => <double>[]);
 
     int i = 0; // Índice para recorrer la matriz.
     while (i < matriz[0].length) {
@@ -187,9 +357,9 @@ class ConteoPasosTexteando {
           matriz[0][i + 1] == 1) {
         // --- LÓGICA SIMPLIFICADA ---
         // Siempre seleccionamos los datos correspondientes al segundo '1' de la secuencia.
-        resultado[0].add(matriz[0][i + 1]);
-        resultado[1].add(matriz[1][i + 1]);
-        resultado[2].add(matriz[2][i + 1]);
+        for (int fila = 0; fila < numFilas; fila++) {
+          resultado[fila].add(matriz[fila][i + 1]);
+        }
 
         // Avanzamos el índice en 2 para saltar el par de '1's que acabamos de procesar.
         i += 2;
@@ -203,9 +373,9 @@ class ConteoPasosTexteando {
       } else {
         // Si el elemento actual no es un '1' o no inicia una secuencia,
         // simplemente lo agregamos al resultado y avanzamos al siguiente.
-        resultado[0].add(matriz[0][i]);
-        resultado[1].add(matriz[1][i]);
-        resultado[2].add(matriz[2][i]);
+        for (int fila = 0; fila < numFilas; fila++) {
+          resultado[fila].add(matriz[fila][i]);
+        }
         i++;
       }
     }

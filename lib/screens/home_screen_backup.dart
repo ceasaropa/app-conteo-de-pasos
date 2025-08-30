@@ -548,7 +548,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Expanded(
                 child: _buildStatCard(
                   'Pasos Totales',
-                  '${_dataProcessor.matrizUltimosDatos[3][2].toInt()}',
+                  '${_dataProcessor.matrizPasos[0][2].toInt()}',
                   Icons.directions_walk,
                   const Color(0xFF4ECDC4),
                 ),

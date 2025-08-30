@@ -3,322 +3,260 @@ import 'package:proyecto_imu_v1_2/sensor/data/clasificador_de_datos.dart';
 import 'package:proyecto_imu_v1_2/sensor/data/fusion_y_acortamiento_datos.dart';
 import 'package:proyecto_imu_v1_2/sensor/data/conteopasostexteo.dart';
 
+// --- MEJORA 1: Clase dedicada a agrupar todos los datos de una única lectura ---
+/// Representa una única captura de datos del sensor en un instante de tiempo.
+class SensorReading {
+  final double accMagnitude;
+  final double gyroMagnitude;
+  final double heading;
+
+  // Datos resultantes del filtrado en tiempo real
+  final double accFiltered;
+  final double accFiltered2ndOrder;
+  final double accFiltered4thOrder;
+  final double gyroFiltered;
+
+  SensorReading({
+    required this.accMagnitude,
+    required this.gyroMagnitude,
+    required this.heading,
+    required this.accFiltered,
+    required this.accFiltered2ndOrder,
+    required this.accFiltered4thOrder,
+    required this.gyroFiltered,
+  });
+}
+
+// --- Clase Principal Refactorizada ---
 class DataProcessor {
+  // Instancias de clases de procesamiento
   final ConteoPasosTexteando conteoPasos = ConteoPasosTexteando();
   final _acortaFusionaDatos = ProcesamientoEventos();
-  
+
   // Filtros en tiempo real
-  final StreamingFilter _accFilter = StreamingFilter(cutoffHz: 2, fs: 125);
+  final StreamingFilter _accFilter = StreamingFilter(cutoffHz: 2.5, fs: 125);
   final StreamingFilter _gyroFilter = StreamingFilter(cutoffHz: 4, fs: 125);
-  
-  // Datos principales (consolidados)
-  List<double> accMagnitudeList = List.filled(50000, 0.0);
-  List<double> gyroMagnitudeList = List.filled(50000, 0.0);
-  List<double> accMagnitudeListFiltered = List.filled(50000, 0.0);
-  List<double> gyroMagnitudeListFiltered = List.filled(50000, 0.0);
-  
-  // Ventanas de datos desfasados
-  List<double> accMagnitudeListDesfasada = [];
-  List<double> gyroMagnitudeListDesfasada = [];
-  
-  // Historial procesado
-  List<double> historialFiltrado = [];
-  List<double> ventanaGyroXYZFiltradaList = [];
-  
+  final StreamingFilter2ndOrder _accFilter2ndOrder = StreamingFilter2ndOrder(
+    cutoffHz: 2.5,
+    fs: 125,
+  );
+  final StreamingFilter4thOrder _accFilter4thOrder = StreamingFilter4thOrder(
+    cutoffHz: 2.5,
+    fs: 125,
+  );
+
+  // --- MEJORA 2: Usar una única lista de objetos en lugar de múltiples listas paralelas ---
+  // Esta lista almacena el historial completo de todas las lecturas.
+  final List<SensorReading> readings = [];
+
   // Parámetros de configuración
-  final int ventanaTiempo = 125;
-  int indiceInicio = 0;
-  int index = 0;
-  
+  final int ventanaTiempo = 125; // 125 muestras por ventana de análisis
+  final int desfase = 25; // Desfase para ciertas señales
+  int indiceInicio = 0; // Índice de inicio de la próxima ventana a procesar
+
+  // Getter para mantener compatibilidad con la UI que usa `index`
+  int get index => readings.length;
+
   // Umbrales
   double umbralGyroPico = 1;
-  double umbralPico = 1;
+  double umbralPico = 0.92;
   double umbralPicoSinFiltrar = 1.2;
-  double umbralValle = -0.5;
+  double umbralValle = -0.7;
   double umbralValleSinFiltrar = -0.6;
 
-  // Estados de análisis
-  bool inicioAnalisis3 = false;
-  bool inicioAnalisis4 = false;
-  bool inicioAnalisis5 = false;
-  bool inicioAnalisis6 = false;
-  bool inicioAnalisis7 = false;
-  bool inicioAnalisis8 = false;
-  bool inicioAnalisis9 = false;
-
-  // Resultados de análisis (consolidados)
-  List<double> crucesPorCeroList = [];
-  List<double> crucesPorCeroListFiltrado = [];
-  List<double> picosList = [];
-  List<double> picosListFiltrado = [];
-  List<double> picosGyroFiltrado = [];
-  List<double> vallesList = [];
-  List<double> vallesListFiltrado = [];
-  List<double> unionCrucesPicosVallesList = [];
-  List<double> unionCrucesPicosVallesListFiltrado = [];
-  List<double> unionCrucesPicosVallesListFiltradoTotal = [];
-
-  // Matrices de procesamiento (consolidadas)
-  List<List<double>> matrizGyro = [[], [], []];
-  List<List<double>> matrizordenada = [[], [], []];
+  // --- Listas reincorporadas según solicitud ---
+  // Estas listas acumulan datos a lo largo del tiempo, como en la versión original.
+  List<double> accMagnitudeListDesfasada = [];
+  List<double> gyroMagnitudeListDesfasada = [];
+  List<double> historialFiltrado = [];
+  List<double> ventanaGyroXYZFiltradaList = [];
+  List<List<double>> matrizordenada = [
+    [],
+    [],
+    [],
+    [],
+  ]; // 4 filas: símbolos, magnitudes, tiempos, heading
   List<double> primeraFilaMatrizOrdenada = [];
-  
-  // Datos de salida finales
-  List<List<double>> matrizUltimosDatos = List.generate(5, (i) => List.filled(i == 4 ? 20 : 4, 0.0));
-  List<List<double>> matrizSecuenciasrevisar = [];
+
+  // --- VARIABLES AÑADIDAS PARA COMPATIBILIDAD CON LA UI ---
+  List<double> accMagnitudeListFiltered = [];
+  List<double> accMagnitudeListFiltered2ndOrder = [];
+  List<double> accMagnitudeListFiltered4thOrder = [];
+
+  // Listas de resultados inicializadas como vacías y crecibles
+  List<double> unionCrucesPicosVallesListFiltradoTotal = [];
   List<List<double>> matrizsignalfiltertotal = [];
+  List<List<double>> matrizSecuenciasrevisar = [];
   List<double> unionFiltradorecortadoTotal = [];
   List<double> unionFiltradorecortadoTotal2 = [];
   List<int> pasosPorVentana = [];
   List<double> tiempoDePasosList = [];
-  List<List<double>> matrizordenadatotal = [[], [], [], [], []];
+  List<double> longitudDePasosList = [];
+  List<List<double>> matrizordenadatotal = List.generate(5, (_) => []);
   List<double> tiemposRestados = [];
 
-  void addAccelerometer(
-    double magnitude,
-    double gyroMagnitude,
-  ) {
-    // Paso 1: Filtrar en tiempo real
-    double accFiltered = _accFilter.filter(magnitude);
-    double gyroFiltered = _gyroFilter.filter(gyroMagnitude);
-    
-    int inicio = indiceInicio;
-    int fin = inicio + ventanaTiempo;
-    
-    if (index < 50000) {
-      // Guardar datos originales y filtrados
-      accMagnitudeList[index] = magnitude;
-      gyroMagnitudeList[index] = gyroMagnitude;
-      accMagnitudeListFiltered[index] = accFiltered;
-      gyroMagnitudeListFiltered[index] = gyroFiltered;
-      index++;
-    }
-    
-    bool ready = (indiceInicio + ventanaTiempo <= index);
-    if (ready) {
-      _processWindow(inicio, fin);
-      inicioAnalisis3 = true; // El pipeline ahora comienza en la etapa 3
-      indiceInicio += ventanaTiempo;
-    }
-    
-    // Procesar análisis secuencial
-    if (inicioAnalisis3) _processCrossings(inicio, fin);
-    if (inicioAnalisis4) _processPeaks(inicio, fin);
-    if (inicioAnalisis5) _processValleys(inicio, fin);
-    if (inicioAnalisis6) _processUnions();
-    if (inicioAnalisis7) _processMatrices(inicio, fin);
-    if (inicioAnalisis8) _processStepCounting();
-    if (inicioAnalisis9) _finalizarAnalisis();
-  }
-  
-  void _processWindow(int inicio, int fin) {
-    // --- Lógica de la ventana de datos crudos y desfasados ---
-    var ventanaAccXYZ = accMagnitudeList.sublist(
-      inicio,
-      fin,
-    );
-    var ventanaGyroXYZ = gyroMagnitudeList.sublist(
-      inicio,
-      fin,
-    );
-    
-    List<double> ventanaAccXYZdesfasada;
-    List<double> ventanaGyroXYZdesfasada;
-    
-    if (inicio == 0) {
-      List<double> inicioDesfase = [...List.filled(25, 0.0), ...ventanaAccXYZ];
-      ventanaAccXYZdesfasada = inicioDesfase.sublist(
-        inicio,
-        fin,
-      );
-      inicioDesfase = [...List.filled(25, 0.0), ...ventanaGyroXYZ];
-      ventanaGyroXYZdesfasada = inicioDesfase.sublist(
-        inicio,
-        fin,
-      );
-    } else {
-      ventanaAccXYZdesfasada = accMagnitudeList.sublist(
-        inicio - 25,
-        fin - 25,
-      );
-      ventanaGyroXYZdesfasada = gyroMagnitudeList.sublist(
-        inicio - 25,
-        fin - 25,
-      );
-    }
-    
-    accMagnitudeListDesfasada.addAll(ventanaAccXYZdesfasada);
-    gyroMagnitudeListDesfasada.addAll(ventanaGyroXYZdesfasada);
+  // Datos de salida finales (incluye 4 filas: 3 originales + 1 para heading filtrado)
+  List<List<double>> matrizDatosRecientes = List.generate(
+    4,
+    (_) => List.filled(4, 0.0),
+  );
+  List<List<double>> matrizPasos = List.generate(
+    3,
+    (i) => List.filled(20, 0.0),
+  );
 
-    // --- Lógica de la ventana de datos filtrados (antes en _processFiltering) ---
-    var ventanaAccXYZFiltered = accMagnitudeListFiltered.sublist(
-      inicio,
-      fin,
-    );
-    var ventanaGyroXYZFiltered = gyroMagnitudeListFiltered.sublist(
-      inicio,
-      fin,
+  /// Añade una nueva lectura de acelerómetro y giroscopio, la filtra y dispara el procesamiento por ventanas.
+  void addSensorData(double magnitude, double gyroMagnitude, double heading) {
+    // Paso 1: Filtrar los datos crudos en tiempo real
+    final accFiltered = _accFilter.filter(magnitude);
+    final gyroFiltered = _gyroFilter.filter(gyroMagnitude);
+    final accFiltered2nd = _accFilter2ndOrder.filter(magnitude);
+    final accFiltered4th = _accFilter4thOrder.filter(magnitude);
+
+    // Paso 2: Crear un objeto `SensorReading` y añadirlo al historial principal
+    readings.add(
+      SensorReading(
+        accMagnitude: magnitude,
+        gyroMagnitude: gyroMagnitude,
+        heading: heading,
+        accFiltered: accFiltered,
+        gyroFiltered: gyroFiltered,
+        accFiltered2ndOrder: accFiltered2nd,
+        accFiltered4thOrder: accFiltered4th,
+      ),
     );
 
-    historialFiltrado.addAll(ventanaAccXYZFiltered);
-    ventanaGyroXYZFiltradaList.addAll(ventanaGyroXYZFiltered);
-    matrizsignalfiltertotal.add(ventanaAccXYZFiltered); // Usar datos filtrados
+    // --- Poblar las listas adicionales para la UI ---
+    accMagnitudeListFiltered.add(accFiltered);
+    accMagnitudeListFiltered2ndOrder.add(accFiltered2nd);
+    accMagnitudeListFiltered4thOrder.add(accFiltered4th);
+
+    // Paso 3: Comprobar si hay suficientes datos para procesar una nueva ventana
+    if (readings.length >= indiceInicio + ventanaTiempo) {
+      _processPipelineForWindow(indiceInicio, indiceInicio + ventanaTiempo);
+      indiceInicio +=
+          ventanaTiempo; // Avanzar el índice para la próxima ventana
+    }
   }
-  
-  void _processCrossings(int inicio, int fin) {
-    if (accMagnitudeListDesfasada.length < ventanaTiempo ||
-        historialFiltrado.length < ventanaTiempo) {
-      inicioAnalisis3 = false;
-      inicioAnalisis4 = true;
+
+  /// Ejecuta toda la secuencia de análisis para una ventana de datos específica.
+  void _processPipelineForWindow(int inicio, int fin) {
+    if (inicio < desfase) {
+      print(
+        "Esperando más datos para procesar la primera ventana con desfase...",
+      );
       return;
     }
-    var ventanaDesfasada = accMagnitudeListDesfasada.sublist(
-      accMagnitudeListDesfasada.length - ventanaTiempo,
-      accMagnitudeListDesfasada.length
+
+    // --- Preparación de las ventanas de datos ---
+    final ventanaActual = readings.sublist(inicio, fin);
+    final ventanaDesfasada = readings.sublist(inicio - desfase, fin - desfase);
+
+    final accDesfasada = ventanaDesfasada.map((r) => r.accMagnitude).toList();
+    final gyroDesfasada = ventanaDesfasada.map((r) => r.gyroMagnitude).toList();
+    final accFiltrada = ventanaActual.map((r) => r.accFiltered).toList();
+    final gyroFiltrada = ventanaActual.map((r) => r.gyroFiltered).toList();
+    final headingWindow = ventanaActual.map((r) => r.heading).toList();
+
+    // --- Poblar las listas reincorporadas ---
+    accMagnitudeListDesfasada.addAll(accDesfasada);
+    gyroMagnitudeListDesfasada.addAll(gyroDesfasada);
+    historialFiltrado.addAll(accFiltrada);
+    ventanaGyroXYZFiltradaList.addAll(gyroFiltrada);
+    matrizsignalfiltertotal.add(accFiltrada);
+
+    // --- Etapa 1: Cruces por cero ---
+    final crucesPorCeroListFiltrado = AnalizadorDeSenales.crucesPorCero(
+      accFiltrada,
     );
-    var datosFiltrados = historialFiltrado.sublist(
-      historialFiltrado.length - ventanaTiempo,
-      historialFiltrado.length
+
+    // --- Etapa 2: Detección de picos ---
+    final picosListFiltrado = AnalizadorDeSenales.deteccionPicos(
+      accFiltrada,
+      umbralPico,
     );
-    
-    crucesPorCeroList = AnalizadorDeSenales.crucesPorCero(
-      ventanaDesfasada);
-    crucesPorCeroListFiltrado = AnalizadorDeSenales.crucesPorCero(
-      datosFiltrados);
-    
-    inicioAnalisis3 = false;
-    inicioAnalisis4 = true;
-  }
-  
-  void _processPeaks(int inicio, int fin) {
-    if (accMagnitudeListDesfasada.length < ventanaTiempo ||
-        historialFiltrado.length < ventanaTiempo ||
-        ventanaGyroXYZFiltradaList.length < ventanaTiempo) {
-      inicioAnalisis4 = false;
-      inicioAnalisis5 = true;
-      return;
-    }
-    var ventanaDesfasada = accMagnitudeListDesfasada.sublist(
-      accMagnitudeListDesfasada.length - ventanaTiempo,
-      accMagnitudeListDesfasada.length
+    final picosGyroFiltrado = AnalizadorDeSenales.deteccionPicos(
+      gyroFiltrada,
+      umbralGyroPico,
     );
-    var datosFiltrados = historialFiltrado.sublist(
-      historialFiltrado.length - ventanaTiempo,
-      historialFiltrado.length
+
+    // --- Etapa 3: Detección de valles ---
+    final vallesListFiltrado = AnalizadorDeSenales.deteccionValles(
+      accFiltrada,
+      umbralValle,
     );
-    var ventanaGyroFiltrada = ventanaGyroXYZFiltradaList.sublist(
-      ventanaGyroXYZFiltradaList.length - ventanaTiempo,
-      ventanaGyroXYZFiltradaList.length
+
+    // --- Etapa 4: Unión de eventos ---
+    final unionCrucesPicosVallesListFiltrado =
+        AnalizadorDeSenales.unionCrucesPicosValles(
+          crucesPorCeroListFiltrado,
+          picosListFiltrado,
+          vallesListFiltrado,
+        );
+    unionCrucesPicosVallesListFiltradoTotal.addAll(
+      unionCrucesPicosVallesListFiltrado,
     );
-    
-    picosList = AnalizadorDeSenales.deteccionPicos(ventanaDesfasada, umbralPicoSinFiltrar);
-    picosListFiltrado = AnalizadorDeSenales.deteccionPicos(datosFiltrados, umbralPico);
-    picosGyroFiltrado = AnalizadorDeSenales.deteccionPicos(ventanaGyroFiltrada, umbralGyroPico);
-    
-    inicioAnalisis4 = false;
-    inicioAnalisis5 = true;
-  }
-  
-  void _processValleys(int inicio, int fin) {
-    if (accMagnitudeListDesfasada.length < ventanaTiempo ||
-        historialFiltrado.length < ventanaTiempo) {
-      inicioAnalisis5 = false;
-      inicioAnalisis6 = true;
-      return;
-    }
-    var ventanaDesfasada = accMagnitudeListDesfasada.sublist(
-      accMagnitudeListDesfasada.length - ventanaTiempo,
-      accMagnitudeListDesfasada.length
+
+    // --- Etapa 5: Procesamiento de matrices con heading integrado usando fusion_y_acortamiento_datos ---
+    final indicesGyro = List.generate(
+      picosGyroFiltrado.length,
+      (i) => i.toDouble(),
     );
-    var datosFiltrados = historialFiltrado.sublist(
-      historialFiltrado.length - ventanaTiempo,
-      historialFiltrado.length
+    final (simbolos, tiempos, magnitudes) = _acortaFusionaDatos
+        .filtrarSimbolosCero(picosGyroFiltrado, gyroFiltrada, indicesGyro);
+    final matrizGyro = [simbolos, tiempos, magnitudes];
+
+    // Usar el nuevo método integrado que maneja heading directamente
+    matrizordenada = _acortaFusionaDatos.matrizAcortadaConHeading(
+      unionCrucesPicosVallesListFiltrado,
+      accFiltrada,
+      headingWindow,
     );
-    
-    vallesList = AnalizadorDeSenales.deteccionValles(ventanaDesfasada, umbralValleSinFiltrar);
-    vallesListFiltrado = AnalizadorDeSenales.deteccionValles(datosFiltrados, umbralValle);
-    
-    inicioAnalisis5 = false;
-    inicioAnalisis6 = true;
-  }
-  
-  void _processUnions() {
-    unionCrucesPicosVallesList = AnalizadorDeSenales.unionCrucesPicosValles(
-      crucesPorCeroList, picosList, vallesList);
-    unionCrucesPicosVallesListFiltrado = AnalizadorDeSenales.unionCrucesPicosValles(
-      crucesPorCeroListFiltrado, picosListFiltrado, vallesListFiltrado);
-    
-    unionCrucesPicosVallesListFiltradoTotal.addAll(unionCrucesPicosVallesListFiltrado);
-    
-    inicioAnalisis6 = false;
-    inicioAnalisis7 = true;
-  }
-  
-  void _processMatrices(int inicio, int fin) {
-    if (accMagnitudeListDesfasada.length < ventanaTiempo ||
-        historialFiltrado.length < ventanaTiempo ||
-        ventanaGyroXYZFiltradaList.length < ventanaTiempo) {
-      inicioAnalisis7 = false;
-      inicioAnalisis8 = true;
-      return;
-    }
-    var datosFiltrados = historialFiltrado.sublist(
-      historialFiltrado.length - ventanaTiempo,
-      historialFiltrado.length
-    );
-    var ventanaGyroFiltrada = ventanaGyroXYZFiltradaList.sublist(
-      ventanaGyroXYZFiltradaList.length - ventanaTiempo,
-      ventanaGyroXYZFiltradaList.length
-    );
-    
-    // Procesamiento del giroscopio
-    List<double> indices = List.generate(picosGyroFiltrado.length, (index) => index.toDouble());
-    final (simbolosFiltrados, magnitudesFiltradas, tiemposFiltrados) = 
-      _acortaFusionaDatos.filtrarSimbolosCero(picosGyroFiltrado, ventanaGyroFiltrada, indices);
-    matrizGyro = [simbolosFiltrados, tiemposFiltrados, magnitudesFiltradas];
-    
-    // Crear matrices acortadas
-    matrizordenada = _acortaFusionaDatos.matrizAcortada(unionCrucesPicosVallesListFiltrado, datosFiltrados);
+
     primeraFilaMatrizOrdenada.addAll(matrizordenada[0]);
-  
 
-    inicioAnalisis7 = false;
-    inicioAnalisis8 = true;
-  }
-  
-  void _processStepCounting() {
+    // --- Etapa 6: Conteo de pasos ---
     conteoPasos.procesar(
-      matrizordenada, matrizUltimosDatos, matrizSecuenciasrevisar,
-      unionFiltradorecortadoTotal, unionFiltradorecortadoTotal2,
-      ventanaTiempo, matrizGyro, tiemposRestados);
-      
-    pasosPorVentana.add(matrizUltimosDatos[3][1].toInt());
-    for (int i = 0; i < matrizUltimosDatos[3][1]; i++) {
-      tiempoDePasosList.add(matrizUltimosDatos[4][i]);
-    }
-    matrizUltimosDatos[3][1] = 0;
+      matrizordenada, // Matriz de 4 filas con heading integrado
+      matrizDatosRecientes,
+      matrizPasos,
+      matrizSecuenciasrevisar,
+      unionFiltradorecortadoTotal,
+      unionFiltradorecortadoTotal2,
+      ventanaTiempo,
+      matrizGyro,
+      tiemposRestados,
+    );
 
-    inicioAnalisis8 = false;
-    inicioAnalisis9 = true;
-  }
-  
-  void _finalizarAnalisis() {
+    final pasosEnEstaVentana = matrizPasos[0][1].toInt();
+    pasosPorVentana.add(pasosEnEstaVentana);
+    for (int i = 0; i < pasosEnEstaVentana; i++) {
+      tiempoDePasosList.add(matrizPasos[1][i]);
+      longitudDePasosList.add(matrizPasos[2][i]);
+    }
+    matrizPasos[0][1] = 0; // Resetear contador para la próxima ventana
+
+    // --- Etapa 7: Finalización y consolidación de resultados ---
+    // Primeras 3 filas: símbolos, magnitudes, tiempos de eventos
     for (int i = 0; i < 3; i++) {
       matrizordenadatotal[i].addAll(matrizordenada[i]);
     }
-    matrizordenadatotal[3] = tiempoDePasosList;
+    // Índice 3: tiempos de pasos (mantener estructura original)
+    matrizordenadatotal[3] = List.from(tiempoDePasosList);
+    // Índice 4: datos de gyro (mantener estructura original)
     matrizordenadatotal[4].addAll(matrizGyro[2]);
 
-    inicioAnalisis9 = false;
+    // TODO: Considerar expandir matrizordenadatotal para incluir heading en índice 5
+    // si se necesita acceso global a los datos de heading procesados
   }
 
-  // Información del estado del procesador
+  /// Devuelve un mapa con el estado actual del procesador.
   Map<String, dynamic> getProcessorStatus() {
     return {
-      'index': index,
-      'indiceInicio': indiceInicio,
-      'totalWindows': pasosPorVentana.length,
-      'totalSteps': matrizUltimosDatos[3][2].toInt(),
+      'totalReadings': readings.length,
+      'processedWindows': (indiceInicio / ventanaTiempo).floor(),
+      'totalSteps': matrizPasos[0][2].toInt(),
+      'stepsPerWindow': pasosPorVentana,
       'thresholds': {
         'umbralPico': umbralPico,
         'umbralValle': umbralValle,

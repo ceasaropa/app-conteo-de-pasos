@@ -1,3 +1,4 @@
+
 class AnalizadorDeSenales {
   static List<double> crucesPorCero(
     List<double> senalFiltrada,
