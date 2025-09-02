@@ -297,9 +297,20 @@ class AnalysisSection extends StatelessWidget {
               color: const Color(0xFFF7971E),
               itemCount: dataProcessor.tiemposRestados.length ~/ 2,
               itemBuilder: (context, index) {
-                final tiempo1 = dataProcessor.tiemposRestados[index * 2]
+                // Validación adicional para evitar range error
+                final index1 = index * 2;
+                final index2 = index * 2 + 1;
+
+                if (index2 >= dataProcessor.tiemposRestados.length) {
+                  return const Text(
+                    'Error: Índice fuera de rango',
+                    style: TextStyle(color: Colors.red, fontSize: 14),
+                  );
+                }
+
+                final tiempo1 = dataProcessor.tiemposRestados[index1]
                     .toStringAsFixed(2);
-                final tiempo2 = dataProcessor.tiemposRestados[index * 2 + 1]
+                final tiempo2 = dataProcessor.tiemposRestados[index2]
                     .toStringAsFixed(2);
                 return Text(
                   'Par ${index + 1}: [$tiempo1, $tiempo2]',

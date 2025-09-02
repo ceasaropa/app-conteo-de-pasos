@@ -39,13 +39,38 @@ class MedianFilter {
     if (_buffer.length > _windowSize) {
       _buffer.removeFirst();
     }
+
+    // Validación para evitar range errors
+    if (_buffer.isEmpty) {
+      return input;
+    }
+
     List<double> sorted = List.from(_buffer)..sort();
     int middle = sorted.length ~/ 2;
-    if (sorted.length % 2 == 0) {
-      return (sorted[middle - 1] + sorted[middle]) / 2.0;
-    } else {
-      return sorted[middle];
+
+    // Validación adicional de límites
+    if (sorted.isEmpty) {
+      return input;
     }
+
+    if (sorted.length % 2 == 0) {
+      // Validar que middle-1 esté dentro de límites
+      if (middle > 0 && middle < sorted.length) {
+        return (sorted[middle - 1] + sorted[middle]) / 2.0;
+      } else if (middle >= sorted.length && sorted.isNotEmpty) {
+        return sorted.last;
+      } else if (middle <= 0 && sorted.isNotEmpty) {
+        return sorted.first;
+      }
+    } else {
+      // Validar que middle esté dentro de límites
+      if (middle >= 0 && middle < sorted.length) {
+        return sorted[middle];
+      }
+    }
+
+    // Valor por defecto si algo sale mal
+    return input;
   }
 
   void reset() {
@@ -68,11 +93,28 @@ class OutlierDetector {
       _history.add(value);
       return false;
     }
+
+    // Validación para evitar división por cero y range errors
+    if (_history.isEmpty) {
+      _history.add(value);
+      return false;
+    }
+
     double mean = _history.reduce((a, b) => a + b) / _history.length;
     double variance =
         _history.map((x) => pow(x - mean, 2)).reduce((a, b) => a + b) /
         _history.length;
     double stdDev = sqrt(variance);
+
+    // Validación adicional para evitar problemas con valores no finitos
+    if (!stdDev.isFinite || stdDev <= 0) {
+      _history.add(value);
+      if (_history.length > _windowSize) {
+        _history.removeFirst();
+      }
+      return false;
+    }
+
     bool isOutlier = (value - mean).abs() > _threshold * stdDev;
     _history.add(value);
     if (_history.length > _windowSize) {
@@ -350,6 +392,7 @@ class UltraLowNoisePresets {
       peakDecay: 0.01, // Casi sin decaimiento
     );
   }
+
   static UltraLowNoiseAGC forTransparentSignal() {
     return UltraLowNoiseAGC(
       targetAmplitude: 1.0,

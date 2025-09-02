@@ -80,8 +80,8 @@ class SensorManager {
       dataProcessor.addSensorData(
         accMagnitude,
         gyroMagnitude,
-        heading!,
-      ); // Asegúrate de pasar el heading
+        heading ?? 0.0, // Validación adicional para evitar null
+      ); // Asegurarse de pasar el heading
 
       sampleCount++;
       onUpdate();

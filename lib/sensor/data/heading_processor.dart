@@ -79,6 +79,10 @@ class HeadingProcessor {
 
     final intervalData = <double>[];
     for (int i = 0; i < timeArray.length; i++) {
+      // Validación adicional de límites para evitar range errors
+      if (i >= timeArray.length || i >= azimuthArray.length) {
+        break;
+      }
       if (timeArray[i] >= startTime && timeArray[i] <= endTime) {
         intervalData.add(azimuthArray[i]);
       }
@@ -90,13 +94,22 @@ class HeadingProcessor {
       double diferenciaMinima = (timeArray[0] - tiempoMedio).abs();
 
       for (int i = 1; i < timeArray.length; i++) {
+        // Validación adicional de límites
+        if (i >= timeArray.length) {
+          break;
+        }
         final diferencia = (timeArray[i] - tiempoMedio).abs();
         if (diferencia < diferenciaMinima) {
           diferenciaMinima = diferencia;
           indiceMinimo = i;
         }
       }
-      return azimuthArray[indiceMinimo];
+      // Validar que indiceMinimo esté dentro de límites antes de acceder al array
+      if (indiceMinimo >= 0 && indiceMinimo < azimuthArray.length) {
+        return azimuthArray[indiceMinimo];
+      } else {
+        return _defaultHeadingValue;
+      }
     }
 
     if (intervalData.length == 1) return intervalData.first;
@@ -112,6 +125,10 @@ class HeadingProcessor {
     final normalizedValues = List<double>.from(intervalData);
     if (valoresArriba270 > 0 && valoresAbajo90 > 0) {
       for (int i = 0; i < normalizedValues.length; i++) {
+        // Validación adicional de límites
+        if (i >= normalizedValues.length) {
+          break;
+        }
         if (normalizedValues[i] < _discontinuityThresholdLow) {
           normalizedValues[i] += _fullCircle;
         }
@@ -124,9 +141,18 @@ class HeadingProcessor {
     double sumaPesos = 0.0;
 
     for (int i = 0; i < n; i++) {
+      // Validación adicional de límites
+      if (i >= normalizedValues.length) {
+        break;
+      }
       final peso = (i + 1).toDouble();
       sumaPonderada += normalizedValues[i] * peso;
       sumaPesos += peso;
+    }
+
+    // Validar división por cero
+    if (sumaPesos == 0) {
+      return _defaultHeadingValue;
     }
 
     double promedio = sumaPonderada / sumaPesos;

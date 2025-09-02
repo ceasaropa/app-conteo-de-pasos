@@ -78,7 +78,14 @@ class ProcesamientoEventos {
     final magnitudesFiltradas = <double>[];
     final tiemposFiltrados = <double>[];
 
-    for (int i = 0; i < simbolosList.length; i++) {
+    // Encontrar la longitud mínima para evitar range errors
+    final minLength = [
+      simbolosList.length,
+      magnitudesList.length,
+      tiemposList.length,
+    ].reduce((a, b) => a < b ? a : b);
+
+    for (int i = 0; i < minLength; i++) {
       if (simbolosList[i] != 0) {
         simbolosFiltrados.add(simbolosList[i]);
         magnitudesFiltradas.add(magnitudesList[i]);
@@ -102,7 +109,15 @@ class ProcesamientoEventos {
     final tiemposFiltrados = <double>[];
     final headingFiltrado = <double>[];
 
-    for (int i = 0; i < simbolosList.length; i++) {
+    // Encontrar la longitud mínima para evitar range errors
+    final minLength = [
+      simbolosList.length,
+      magnitudesList.length,
+      tiemposList.length,
+      headingList.length,
+    ].reduce((a, b) => a < b ? a : b);
+
+    for (int i = 0; i < minLength; i++) {
       if (simbolosList[i] != 0) {
         simbolosFiltrados.add(simbolosList[i]);
         magnitudesFiltradas.add(magnitudesList[i]);
@@ -131,11 +146,22 @@ class ProcesamientoEventos {
       <double>[], // tiempos
     ];
 
+    // Validación de dimensiones
+    final minLength = [
+      simbolosFiltrados.length,
+      magnitudesFiltradas.length,
+      tiemposFiltrados.length,
+    ].reduce((a, b) => a < b ? a : b);
+
+    if (minLength == 0) {
+      return datosProcesados;
+    }
+
     int? simboloActual;
     double? mejorMagnitud;
     double? mejorTiempo;
 
-    for (int i = 0; i < simbolosFiltrados.length; i++) {
+    for (int i = 0; i < minLength; i++) {
       final simbolo = simbolosFiltrados[i].toInt();
       final magnitud = magnitudesFiltradas[i];
       final tiempo = tiemposFiltrados[i];
@@ -159,10 +185,12 @@ class ProcesamientoEventos {
           mejorTiempo = tiempo;
         }
       } else {
-        if (simbolo == 2 && magnitud > mejorMagnitud!) {
+        if (simbolo == 2 && mejorMagnitud != null && magnitud > mejorMagnitud) {
           mejorMagnitud = magnitud;
           mejorTiempo = tiempo;
-        } else if (simbolo == 3 && magnitud < mejorMagnitud!) {
+        } else if (simbolo == 3 &&
+            mejorMagnitud != null &&
+            magnitud < mejorMagnitud) {
           mejorMagnitud = magnitud;
           mejorTiempo = tiempo;
         }
@@ -192,12 +220,24 @@ class ProcesamientoEventos {
       <double>[], // heading
     ];
 
+    // Validación de dimensiones
+    final minLength = [
+      simbolosFiltrados.length,
+      magnitudesFiltradas.length,
+      tiemposFiltrados.length,
+      headingFiltrado.length,
+    ].reduce((a, b) => a < b ? a : b);
+
+    if (minLength == 0) {
+      return datosProcesados;
+    }
+
     int? simboloActual;
     double? mejorMagnitud;
     double? mejorTiempo;
     double? mejorHeading;
 
-    for (int i = 0; i < simbolosFiltrados.length; i++) {
+    for (int i = 0; i < minLength; i++) {
       final simbolo = simbolosFiltrados[i].toInt();
       final magnitud = magnitudesFiltradas[i];
       final tiempo = tiemposFiltrados[i];
@@ -225,11 +265,13 @@ class ProcesamientoEventos {
           mejorHeading = heading;
         }
       } else {
-        if (simbolo == 2 && magnitud > mejorMagnitud!) {
+        if (simbolo == 2 && mejorMagnitud != null && magnitud > mejorMagnitud) {
           mejorMagnitud = magnitud;
           mejorTiempo = tiempo;
           mejorHeading = heading;
-        } else if (simbolo == 3 && magnitud < mejorMagnitud!) {
+        } else if (simbolo == 3 &&
+            mejorMagnitud != null &&
+            magnitud < mejorMagnitud) {
           mejorMagnitud = magnitud;
           mejorTiempo = tiempo;
           mejorHeading = heading;
@@ -252,6 +294,19 @@ class ProcesamientoEventos {
     final simbolosFiltrados = <double>[];
     final magnitudesFiltrados = <double>[];
     final tiemposFiltrados = <double>[];
+
+    // Validación de entrada
+    if (datosCrudos.isEmpty || datosCrudos[0].isEmpty) {
+      return [simbolosFiltrados, magnitudesFiltrados, tiemposFiltrados];
+    }
+
+    // Verificar que todas las filas tengan la misma longitud
+    final expectedLength = datosCrudos[0].length;
+    for (int row = 1; row < datosCrudos.length; row++) {
+      if (datosCrudos[row].length != expectedLength) {
+        return [simbolosFiltrados, magnitudesFiltrados, tiemposFiltrados];
+      }
+    }
 
     int i = 0;
     while (i < datosCrudos[0].length) {
@@ -288,6 +343,38 @@ class ProcesamientoEventos {
     final tiemposFiltrados = <double>[];
     final headingFiltrado = <double>[];
 
+    // Validación de entrada
+    if (datosCrudos.isEmpty || datosCrudos[0].isEmpty) {
+      return [
+        simbolosFiltrados,
+        magnitudesFiltrados,
+        tiemposFiltrados,
+        headingFiltrado,
+      ];
+    }
+
+    // Verificar que todas las filas tengan la misma longitud y que haya al menos 4 filas
+    if (datosCrudos.length < 4) {
+      return [
+        simbolosFiltrados,
+        magnitudesFiltrados,
+        tiemposFiltrados,
+        headingFiltrado,
+      ];
+    }
+
+    final expectedLength = datosCrudos[0].length;
+    for (int row = 1; row < 4; row++) {
+      if (datosCrudos[row].length != expectedLength) {
+        return [
+          simbolosFiltrados,
+          magnitudesFiltrados,
+          tiemposFiltrados,
+          headingFiltrado,
+        ];
+      }
+    }
+
     int i = 0;
     while (i < datosCrudos[0].length) {
       final simbolo = datosCrudos[0][i];
@@ -299,15 +386,24 @@ class ProcesamientoEventos {
         tiemposFiltrados.add(datosCrudos[2][i]);
         headingFiltrado.add(datosCrudos[3][i]);
 
-        // Salta todos los cruces consecutivos
-        while (i + 1 < datosCrudos[0].length && datosCrudos[0][i + 1] == 1) {
+        // Salta todos los cruces consecutivos con validación de límites
+        while (i + 1 < datosCrudos[0].length &&
+            i + 1 < datosCrudos[1].length &&
+            i + 1 < datosCrudos[2].length &&
+            i + 1 < datosCrudos[3].length &&
+            datosCrudos[0][i + 1] == 1) {
           i++;
         }
       } else {
-        simbolosFiltrados.add(simbolo);
-        magnitudesFiltrados.add(datosCrudos[1][i]);
-        tiemposFiltrados.add(datosCrudos[2][i]);
-        headingFiltrado.add(datosCrudos[3][i]);
+        // Validar que i esté dentro de límites para todas las filas antes de acceder
+        if (i < datosCrudos[1].length &&
+            i < datosCrudos[2].length &&
+            i < datosCrudos[3].length) {
+          simbolosFiltrados.add(simbolo);
+          magnitudesFiltrados.add(datosCrudos[1][i]);
+          tiemposFiltrados.add(datosCrudos[2][i]);
+          headingFiltrado.add(datosCrudos[3][i]);
+        }
       }
 
       i++;

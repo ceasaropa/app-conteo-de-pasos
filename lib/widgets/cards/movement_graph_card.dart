@@ -25,9 +25,14 @@ class MovementGraphCard extends StatelessWidget {
     }
 
     // Calcular el recorrido usando PositionCalculator
-    final recorrido = PositionCalculator.calcularRecorrido([distancias, azimuth]);
+    final recorrido = PositionCalculator.calcularRecorrido([
+      distancias,
+      azimuth,
+    ]);
     final posicionFinal = PositionCalculator.obtenerPosicionFinal(recorrido);
-    final distanciaTotal = PositionCalculator.calcularDistanciaTotal(distancias);
+    final distanciaTotal = PositionCalculator.calcularDistanciaTotal(
+      distancias,
+    );
 
     // Extraer coordenadas X e Y
     final xCoords = recorrido[0];
@@ -110,10 +115,7 @@ class MovementGraphCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildStatInfo(
-                'Inicio',
-                '(0.0, 0.0)',
-              ),
+              _buildStatInfo('Inicio', '(0.0, 0.0)'),
               _buildStatInfo(
                 'Final',
                 '(${posicionFinal['x']?.toStringAsFixed(1)}, ${posicionFinal['y']?.toStringAsFixed(1)})',
@@ -130,16 +132,12 @@ class MovementGraphCard extends StatelessWidget {
           ),
 
           const SizedBox(height: 8),
-          
+
           // Eficiencia de ruta
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.route,
-                color: color.withOpacity(0.8),
-                size: 16,
-              ),
+              Icon(Icons.route, color: color.withOpacity(0.8), size: 16),
               const SizedBox(width: 8),
               Text(
                 'Eficiencia de ruta: ${_calculateRouteEfficiency(posicionFinal['distancia'] ?? 0.0, distanciaTotal).toStringAsFixed(1)}%',
@@ -157,9 +155,17 @@ class MovementGraphCard extends StatelessWidget {
   }
 
   Widget _buildMovementChart(List<double> xCoords, List<double> yCoords) {
-    // Crear puntos para el gráfico
+    // Crear puntos para el gráfico con validación de límites
     final spots = <FlSpot>[];
-    for (int i = 0; i < xCoords.length && i < yCoords.length; i++) {
+    final minLength =
+        xCoords.length < yCoords.length ? xCoords.length : yCoords.length;
+
+    for (int i = 0; i < minLength; i++) {
+      // Validación adicional para evitar range errors
+      if (i >= xCoords.length || i >= yCoords.length) {
+        break;
+      }
+
       if (xCoords[i] != 0 || yCoords[i] != 0 || i == 0) {
         spots.add(FlSpot(xCoords[i], yCoords[i]));
       }
@@ -177,7 +183,7 @@ class MovementGraphCard extends StatelessWidget {
     // Calcular límites del gráfico con margen
     final allX = spots.map((s) => s.x).toList();
     final allY = spots.map((s) => s.y).toList();
-    
+
     final minX = allX.reduce(min) - 0.5;
     final maxX = allX.reduce(max) + 0.5;
     final minY = allY.reduce(min) - 0.5;
@@ -223,9 +229,7 @@ class MovementGraphCard extends StatelessWidget {
                 }
               },
             ),
-            belowBarData: BarAreaData(
-              show: false,
-            ),
+            belowBarData: BarAreaData(show: false),
           ),
         ],
 
@@ -305,14 +309,8 @@ class MovementGraphCard extends StatelessWidget {
         borderData: FlBorderData(
           show: true,
           border: Border(
-            left: BorderSide(
-              color: const Color(0xFF64FFDA),
-              width: 2,
-            ),
-            bottom: BorderSide(
-              color: const Color(0xFF64FFDA),
-              width: 2,
-            ),
+            left: BorderSide(color: const Color(0xFF64FFDA), width: 2),
+            bottom: BorderSide(color: const Color(0xFF64FFDA), width: 2),
             right: BorderSide.none,
             top: BorderSide.none,
           ),
@@ -374,18 +372,11 @@ class MovementGraphCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 40),
-          const Icon(
-            Icons.route_outlined,
-            size: 60,
-            color: Colors.white24,
-          ),
+          const Icon(Icons.route_outlined, size: 60, color: Colors.white24),
           const SizedBox(height: 16),
           const Text(
             'No hay datos de movimiento disponibles',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.white54, fontSize: 16),
           ),
           const SizedBox(height: 40),
         ],

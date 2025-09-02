@@ -1,8 +1,5 @@
-
 class AnalizadorDeSenales {
-  static List<double> crucesPorCero(
-    List<double> senalFiltrada,
-  ) {
+  static List<double> crucesPorCero(List<double> senalFiltrada) {
     int n = senalFiltrada.length;
     List<double> vectorCruces = List.filled(n, 0.0);
 
@@ -82,22 +79,32 @@ class AnalizadorDeSenales {
     List<double> picos,
     List<double> valles,
   ) {
-    int N = cruces.length;
-    List<double> vectorCPV = List.filled(N, 0.0);
+    // Validación de entrada para evitar range errors
+    if (cruces.isEmpty || picos.isEmpty || valles.isEmpty) {
+      return <double>[];
+    }
 
-    for (int n = 0; n < N; n++) {
+    // Encontrar la longitud mínima para evitar acceso fuera de límites
+    final minLength = [
+      cruces.length,
+      picos.length,
+      valles.length,
+    ].reduce((a, b) => a < b ? a : b);
+    List<double> vectorCPV = List.filled(minLength, 0.0);
+
+    for (int n = 0; n < minLength; n++) {
       if (cruces[n] == 1.0) {
         vectorCPV[n] = 1.0;
       }
     }
 
-    for (int n = 0; n < N; n++) {
+    for (int n = 0; n < minLength; n++) {
       if (picos[n] == 1.0) {
         vectorCPV[n] = 2.0;
       }
     }
 
-    for (int n = 0; n < N; n++) {
+    for (int n = 0; n < minLength; n++) {
       if (valles[n] == 1.0) {
         vectorCPV[n] = 3.0;
       }

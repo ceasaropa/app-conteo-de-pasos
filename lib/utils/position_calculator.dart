@@ -13,8 +13,17 @@ class PositionCalculator {
   /// - Fila 0: Coordenadas X acumuladas
   /// - Fila 1: Coordenadas Y acumuladas
   static List<List<double>> calcularRecorrido(List<List<double>> dydUnidas) {
-    if (dydUnidas.isEmpty || dydUnidas.length < 2 || dydUnidas[0].isEmpty) {
+    // Validación más robusta de entrada
+    if (dydUnidas.isEmpty ||
+        dydUnidas.length < 2 ||
+        dydUnidas[0].isEmpty ||
+        dydUnidas[1].isEmpty) {
       return [[], []]; // Retornar matriz vacía si los datos no son válidos
+    }
+
+    // Verificar que ambas filas tengan la misma longitud
+    if (dydUnidas[0].length != dydUnidas[1].length) {
+      return [[], []]; // Retornar matriz vacía si las dimensiones no coinciden
     }
 
     final int length = dydUnidas[0].length;
@@ -25,39 +34,74 @@ class PositionCalculator {
     // Array para almacenar ángulos en radianes
     List<double> theta = List.filled(length, 0.0);
 
-    // Paso directamente la primera distancia y el primer azimuth
-    xy[0][0] = dydUnidas[0][0]; // Primera distancia
-    xy[1][0] = dydUnidas[1][0]; // Primer azimuth
+    // Validación adicional antes de acceder a los índices
+    if (length > 0 && dydUnidas[0].isNotEmpty && dydUnidas[1].isNotEmpty) {
+      // Paso directamente la primera distancia y el primer azimuth
+      xy[0][0] = dydUnidas[0][0]; // Primera distancia
+      xy[1][0] = dydUnidas[1][0]; // Primer azimuth
+    }
 
     int contCiclos = 1;
 
     // Filtrar valores no cero y copiar a la matriz de trabajo
     for (int n = 1; n < length; n++) {
-      if (dydUnidas[0][n] != 0) {
-        xy[0][contCiclos] = dydUnidas[0][n];
-        xy[1][contCiclos] = dydUnidas[1][n]; // Sin restar el primer azimuth
-        contCiclos++;
+      // Validación adicional para evitar range errors
+      if (n < dydUnidas[0].length &&
+          n < dydUnidas[1].length &&
+          contCiclos < xy[0].length &&
+          contCiclos < xy[1].length) {
+        if (dydUnidas[0][n] != 0) {
+          xy[0][contCiclos] = dydUnidas[0][n];
+          xy[1][contCiclos] = dydUnidas[1][n]; // Sin restar el primer azimuth
+          contCiclos++;
+        }
       }
     }
 
     // Convertir de coordenadas polares a cartesianas
     for (int n = 0; n < length; n++) {
-      // Convertir grados a radianes
-      theta[n] = xy[1][n] * pi / 180;
+      // Validación antes de acceso a arrays
+      if (n < xy[0].length && n < xy[1].length && n < theta.length) {
+        // Convertir grados a radianes
+        double angle = xy[1][n];
 
-      // Guardar distancia temporal
-      double rAux = xy[0][n];
+        // Validar que el ángulo sea finito
+        if (!angle.isFinite) {
+          angle = 0.0;
+        }
 
-      // Calcular coordenadas cartesianas
-      xy[0][n] = (-1) * rAux * cos(theta[n]); // Valores de X
-      xy[1][n] = rAux * sin(theta[n]); // Valores de Y
+        theta[n] = angle * pi / 180;
+
+        // Guardar distancia temporal
+        double rAux = xy[0][n];
+
+        // Validar que la distancia sea finita
+        if (!rAux.isFinite) {
+          rAux = 0.0;
+        }
+
+        // Calcular coordenadas cartesianas
+        double xCoord = (-1) * rAux * cos(theta[n]);
+        double yCoord = rAux * sin(theta[n]);
+
+        // Validar que las coordenadas sean finitas
+        xy[0][n] = xCoord.isFinite ? xCoord : 0.0;
+        xy[1][n] = yCoord.isFinite ? yCoord : 0.0;
+      }
     }
 
     // Acumular posiciones para obtener el recorrido total
     for (int n = 1; n < length; n++) {
-      if (xy[0][n] != 0) {
-        xy[0][n] = xy[0][n] + xy[0][n - 1]; // X acumulada
-        xy[1][n] = xy[1][n] + xy[1][n - 1]; // Y acumulada
+      // Validación antes de acceso a arrays y al índice anterior
+      if (n < xy[0].length &&
+          n < xy[1].length &&
+          (n - 1) >= 0 &&
+          (n - 1) < xy[0].length &&
+          (n - 1) < xy[1].length) {
+        if (xy[0][n] != 0) {
+          xy[0][n] = xy[0][n] + xy[0][n - 1]; // X acumulada
+          xy[1][n] = xy[1][n] + xy[1][n - 1]; // Y acumulada
+        }
       }
     }
 
@@ -120,7 +164,16 @@ class PositionCalculator {
   static Map<String, double> obtenerPosicionFinal(
     List<List<double>> recorrido,
   ) {
-    if (recorrido.isEmpty || recorrido[0].isEmpty || recorrido[1].isEmpty) {
+    // Validación más robusta
+    if (recorrido.isEmpty ||
+        recorrido.length < 2 ||
+        recorrido[0].isEmpty ||
+        recorrido[1].isEmpty) {
+      return {'x': 0.0, 'y': 0.0, 'distancia': 0.0};
+    }
+
+    // Verificar que ambas filas tengan la misma longitud
+    if (recorrido[0].length != recorrido[1].length) {
       return {'x': 0.0, 'y': 0.0, 'distancia': 0.0};
     }
 
@@ -128,16 +181,29 @@ class PositionCalculator {
     double xFinal = 0.0;
     double yFinal = 0.0;
 
-    for (int i = recorrido[0].length - 1; i >= 0; i--) {
-      if (recorrido[0][i] != 0 || recorrido[1][i] != 0) {
-        xFinal = recorrido[0][i];
-        yFinal = recorrido[1][i];
-        break;
+    final minLength =
+        recorrido[0].length < recorrido[1].length
+            ? recorrido[0].length
+            : recorrido[1].length;
+
+    for (int i = minLength - 1; i >= 0; i--) {
+      // Validación adicional para evitar range errors
+      if (i >= 0 && i < recorrido[0].length && i < recorrido[1].length) {
+        if (recorrido[0][i] != 0 || recorrido[1][i] != 0) {
+          xFinal = recorrido[0][i];
+          yFinal = recorrido[1][i];
+          break;
+        }
       }
     }
 
     // Calcular distancia desde el origen
     double distanciaDesdeOrigen = sqrt(xFinal * xFinal + yFinal * yFinal);
+
+    // Validar que la distancia sea finita
+    if (!distanciaDesdeOrigen.isFinite) {
+      distanciaDesdeOrigen = 0.0;
+    }
 
     return {'x': xFinal, 'y': yFinal, 'distancia': distanciaDesdeOrigen};
   }

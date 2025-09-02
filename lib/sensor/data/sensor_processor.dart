@@ -148,6 +148,24 @@ class DataProcessor {
       return;
     }
 
+    // Validación adicional para evitar range errors
+    if (fin > readings.length ||
+        inicio >= readings.length ||
+        inicio < 0 ||
+        fin <= inicio) {
+      print(
+        "Parámetros de ventana inválidos: inicio=$inicio, fin=$fin, readings.length=${readings.length}",
+      );
+      return;
+    }
+
+    if (inicio - desfase < 0 || fin - desfase > readings.length) {
+      print(
+        "Desfase inválido: inicio-desfase=${inicio - desfase}, fin-desfase=${fin - desfase}",
+      );
+      return;
+    }
+
     // --- Preparación de las ventanas de datos ---
     final ventanaActual = readings.sublist(inicio, fin);
     final ventanaDesfasada = readings.sublist(inicio - desfase, fin - desfase);
@@ -230,21 +248,31 @@ class DataProcessor {
 
     final pasosEnEstaVentana = matrizPasos[0][1].toInt();
     pasosPorVentana.add(pasosEnEstaVentana);
+
+    // Validación antes de acceder a los arrays de pasos
     for (int i = 0; i < pasosEnEstaVentana; i++) {
-      tiempoDePasosList.add(matrizPasos[1][i]);
-      longitudDePasosList.add(matrizPasos[2][i]);
+      if (i < matrizPasos[1].length && i < matrizPasos[2].length) {
+        tiempoDePasosList.add(matrizPasos[1][i]);
+        longitudDePasosList.add(matrizPasos[2][i]);
+      }
     }
     matrizPasos[0][1] = 0; // Resetear contador para la próxima ventana
 
     // --- Etapa 7: Finalización y consolidación de resultados ---
     // Primeras 3 filas: símbolos, magnitudes, tiempos de eventos
     for (int i = 0; i < 3; i++) {
-      matrizordenadatotal[i].addAll(matrizordenada[i]);
+      if (i < matrizordenada.length && i < matrizordenadatotal.length) {
+        matrizordenadatotal[i].addAll(matrizordenada[i]);
+      }
     }
     // Índice 3: tiempos de pasos (mantener estructura original)
-    matrizordenadatotal[3] = List.from(tiempoDePasosList);
+    if (matrizordenadatotal.length > 3) {
+      matrizordenadatotal[3] = List.from(tiempoDePasosList);
+    }
     // Índice 4: datos de gyro (mantener estructura original)
-    matrizordenadatotal[4].addAll(matrizGyro[2]);
+    if (matrizordenadatotal.length > 4 && matrizGyro.length > 2) {
+      matrizordenadatotal[4].addAll(matrizGyro[2]);
+    }
 
     // TODO: Considerar expandir matrizordenadatotal para incluir heading en índice 5
     // si se necesita acceso global a los datos de heading procesados

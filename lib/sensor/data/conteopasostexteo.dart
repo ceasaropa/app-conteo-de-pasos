@@ -183,7 +183,11 @@ class ConteoPasosTexteando {
           matrizDatosRecientes[3][i] = 0; // Nueva fila para heading
         } else {
           int idx = totalFilas - totalFilas1 + (i - faltan);
-          if (idx >= 0 && idx < totalFilas) {
+          if (idx >= 0 &&
+              idx < totalFilas &&
+              idx < matrizDatosAcortada[0].length &&
+              idx < matrizDatosAcortada[1].length &&
+              idx < matrizDatosAcortada[2].length) {
             if (matrizDatosAcortada[2][idx] < -50) {
               matrizDatosRecientes[0][i] = 0.0;
             } else {
@@ -211,6 +215,20 @@ class ConteoPasosTexteando {
     } else {
       for (int i = 0; i < 4; i++) {
         int idx = totalFilas - 4 + i;
+
+        // Validación adicional para evitar range errors
+        if (idx < 0 ||
+            idx >= totalFilas ||
+            idx >= matrizDatosAcortada[0].length ||
+            idx >= matrizDatosAcortada[1].length ||
+            idx >= matrizDatosAcortada[2].length) {
+          matrizDatosRecientes[0][i] = 0.0;
+          matrizDatosRecientes[1][i] = 0.0;
+          matrizDatosRecientes[2][i] = 0.0;
+          matrizDatosRecientes[3][i] = 0.0;
+          continue;
+        }
+
         if (matrizDatosAcortada[2][idx] < -65) {
           matrizDatosRecientes[0][i] = 0.0;
         } else {
@@ -245,6 +263,13 @@ class ConteoPasosTexteando {
     int indicadorPaso = matrizPasos[0][0].toInt();
 
     for (int i = 0; i < filasM; i++) {
+      // Validación adicional para evitar range error
+      if (i + 4 >= matrizDatosAcortada[0].length ||
+          i + 4 >= matrizDatosAcortada[1].length ||
+          i + 4 >= matrizDatosAcortada[2].length) {
+        break; // Salir del bucle si no hay suficientes elementos
+      }
+
       List<double> secuencia = [
         matrizDatosAcortada[0][i],
         matrizDatosAcortada[0][i + 1],
@@ -267,8 +292,15 @@ class ConteoPasosTexteando {
           double tiempo2 = matrizDatosAcortada[2][i + 4];
           double amplitud1 = matrizDatosAcortada[1][i + 1];
           double amplitud2 = matrizDatosAcortada[1][i + 3];
+
           double diferenciaTiempo = (tiempo2 - tiempo1).abs();
-          double diferenciaAmplitud = amplitud1 + amplitud2.abs();
+          double diferenciaAmplitud = amplitud1.abs() + amplitud2.abs();
+
+          // Validar que la diferencia de amplitud sea positiva y finita
+          if (diferenciaAmplitud <= 0 || !diferenciaAmplitud.isFinite) {
+            continue; // Saltar si la diferencia no es válida
+          }
+
           double kDinamico;
           if (secuencia[1] == 2 && secuencia[3] == 3) {
             if (indicadorPaso == 0) {
@@ -282,7 +314,16 @@ class ConteoPasosTexteando {
                 diferenciaTiempo,
                 diferenciaAmplitud,
               );
+
               longitudPaso = kDinamico * pow(diferenciaAmplitud, 0.25);
+
+              // // Validar que longitudPaso sea finita y razonable
+              // if (!longitudPaso.isFinite ||
+              //     longitudPaso <= 0 ||
+              //     longitudPaso > 5.0) {
+              //   longitudPaso = 0.5; // Valor por defecto razonable (50 cm)
+              // }
+
               matrizPasos[1][contadorPasos] = diferenciaTiempo;
               matrizPasos[2][contadorPasos] = longitudPaso;
 
@@ -310,7 +351,16 @@ class ConteoPasosTexteando {
                 diferenciaTiempo,
                 diferenciaAmplitud,
               );
+
               longitudPaso = kDinamico * pow(diferenciaAmplitud, 0.25);
+
+              // // Validar que longitudPaso sea finita y razonable
+              // if (!longitudPaso.isFinite ||
+              //     longitudPaso <= 0 ||
+              //     longitudPaso > 5.0) {
+              //   longitudPaso = 0.5; // Valor por defecto razonable (50 cm)
+              // }
+
               matrizPasos[1][contadorPasos] = diferenciaTiempo;
               matrizPasos[2][contadorPasos] = longitudPaso;
 
@@ -331,7 +381,16 @@ class ConteoPasosTexteando {
 
     matrizPasos[0][1] = contadorPasos.toDouble();
     matrizPasos[0][2] += contadorPasos.toDouble();
-    matrizPasos[0][3] += longitudPaso;
+
+    // Validar que longitudPaso sea finita antes de acumular
+    if (longitudPaso.isFinite && longitudPaso > 0) {
+      matrizPasos[0][3] += longitudPaso;
+    }
+
+    // Validar que el total acumulado sea finito
+    if (!matrizPasos[0][3].isFinite) {
+      matrizPasos[0][3] = 0.0; // Resetear si se vuelve infinito
+    }
   }
 
   // Método privado para filtrar cruces consecutivos
@@ -391,8 +450,34 @@ class ConteoPasosTexteando {
     const List<int> indicesEventos = [1, 3];
     const double umbralTiempo = 11;
 
+    // Validación de límites para evitar range error
+    if (matrizGyro.isEmpty ||
+        matrizGyro[0].isEmpty ||
+        matrizGyro.length < 2 ||
+        matrizDatosAcortada.isEmpty ||
+        matrizDatosAcortada.length < 3 ||
+        indicePaso < 0) {
+      return true; // Retornar true si no hay datos suficientes para validar
+    }
+
+    // Validar que matrizGyro tenga al menos 2 filas y que la segunda fila no esté vacía
+    if (matrizGyro.length < 2 || matrizGyro[1].isEmpty) {
+      return true;
+    }
+
     for (int j = 0; j < matrizGyro[0].length; j++) {
+      // Validar que j esté dentro de los límites para ambas filas
+      if (j >= matrizGyro[1].length) {
+        continue;
+      }
+
       for (int k in indicesEventos) {
+        // Validar que indicePaso + k esté dentro de los límites
+        if (indicePaso + k >= matrizDatosAcortada[2].length ||
+            indicePaso + k < 0) {
+          continue; // Saltar esta iteración si está fuera de límites
+        }
+
         double diferencia =
             (matrizGyro[1][j] - matrizDatosAcortada[2][indicePaso + k]).abs();
         if (diferencia < umbralTiempo) {

@@ -4,10 +4,15 @@ import 'package:fl_chart/fl_chart.dart';
 class GraphBuilder {
   // Método que construye los puntos del gráfico
   List<FlSpot> getGraphData(List<double> data) {
-    return List.generate(
-      data.length,
-      (index) => FlSpot(index.toDouble(), data[index]),
-    );
+    if (data.isEmpty) return [];
+
+    return List.generate(data.length, (index) {
+      // Validación adicional para evitar range errors
+      if (index >= data.length) {
+        return FlSpot(index.toDouble(), 0.0);
+      }
+      return FlSpot(index.toDouble(), data[index]);
+    });
   }
 
   // Método que retorna el widget del gráfico mejorado
@@ -69,10 +74,13 @@ class GraphBuilder {
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 30,
-                interval: data.length > 10 ? (data.length / 5).ceilToDouble() : null,
+                interval:
+                    data.length > 10 ? (data.length / 5).ceilToDouble() : null,
                 getTitlesWidget: (value, meta) {
                   // Solo mostrar algunos valores para evitar saturación
-                  if (value % (data.length > 20 ? (data.length / 5).ceil() : 1) != 0) {
+                  if (value %
+                          (data.length > 20 ? (data.length / 5).ceil() : 1) !=
+                      0) {
                     return const SizedBox();
                   }
                   return Padding(
@@ -103,7 +111,8 @@ class GraphBuilder {
             drawVerticalLine: true,
             drawHorizontalLine: true,
             horizontalInterval: null, // Automático
-            verticalInterval: data.length > 20 ? (data.length / 5).ceilToDouble() : null,
+            verticalInterval:
+                data.length > 20 ? (data.length / 5).ceilToDouble() : null,
             getDrawingHorizontalLine: (value) {
               return FlLine(
                 color: const Color(0xFF37474F).withOpacity(0.3), // Gris tenue
@@ -123,11 +132,15 @@ class GraphBuilder {
             show: true,
             border: Border(
               left: BorderSide(
-                color: const Color(0xFF64FFDA), // Color cyan para el eje izquierdo
+                color: const Color(
+                  0xFF64FFDA,
+                ), // Color cyan para el eje izquierdo
                 width: 2,
               ),
               bottom: BorderSide(
-                color: const Color(0xFF64FFDA), // Color cyan para el eje inferior
+                color: const Color(
+                  0xFF64FFDA,
+                ), // Color cyan para el eje inferior
                 width: 2,
               ),
               right: BorderSide.none, // Sin borde derecho
@@ -154,7 +167,10 @@ class GraphBuilder {
               // Opcional: puedes hacer algo con los toques aquí
             },
             handleBuiltInTouches: true,
-            getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+            getTouchedSpotIndicator: (
+              LineChartBarData barData,
+              List<int> spotIndexes,
+            ) {
               return spotIndexes.map((index) {
                 return TouchedSpotIndicatorData(
                   FlLine(
